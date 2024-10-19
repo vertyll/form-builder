@@ -1,6 +1,6 @@
 [package]
 name = "form_builder"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
 description = "A library for building forms with various fields and validation."
