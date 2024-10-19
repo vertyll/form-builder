@@ -8,7 +8,6 @@ license = "MIT"
 repository = "https://github.com/vertyll/form-builder"
 documentation = "https://docs.rs/form_builder"
 readme = "README.md"
-license-file = "LICENSE"
 keywords = ["form", "builder", "validation"]
 categories = ["data-structures", "parsing"]
 
