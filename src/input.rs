@@ -1,108 +1,44 @@
 use crate::validation::Validator;
+use std::fmt::Debug;
 use std::str::FromStr;
 
-pub fn read_input<T>(prompt: &str, validator: &Validator) -> Result<T, String>
+/// Reads input from the user and validates it using the provided validator.
+///
+/// # Arguments
+///
+/// * `prompt` - The prompt message to be displayed to the user.
+/// * `validator` - An optional `Validator` instance to validate the input.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the input value. It must implement the `FromStr` and `Debug` traits.
+///
+/// # Returns
+///
+/// * `Ok(T)` if the input is successfully read and validated.
+/// * `Err(String)` if there is an error reading or validating the input.
+pub fn read_input<T>(prompt: &str, validator: Option<&Validator>) -> Result<T, String>
 where
     T: FromStr,
-    T::Err: std::fmt::Debug,
+    T::Err: Debug,
 {
+    use std::io::{self, Write};
+
     loop {
-        println!("{}", prompt);
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
 
-        let mut buffer = String::new();
-        std::io::stdin()
-            .read_line(&mut buffer)
-            .map_err(|e| format!("Failed to read input: {}", e))?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim();
 
-        let input = buffer.trim();
-
-        if let Err(error_message) = validator.validate(input) {
-            println!("{}", error_message);
-            continue;
+        if let Some(validator) = validator {
+            if let Err(err) = validator.validate(input) {
+                println!("{}", err);
+                continue;
+            }
         }
 
-        if let Ok(value) = input.parse::<T>() {
-            return Ok(value);
-        } else {
-            println!("Failed to parse input. Please try again.");
-            continue;
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::validation::{ValidationMethods, Validator};
-    use std::io::{BufRead, Cursor};
-
-    fn setup_name_validator() -> Validator {
-        Validator::new(vec![
-            (ValidationMethods::validate_name, Some("Invalid name")),
-            (ValidationMethods::not_empty, Some("Input cannot be empty")),
-        ])
-    }
-
-    fn setup_email_validator() -> Validator {
-        Validator::new(vec![
-            (ValidationMethods::validate_email, Some("Invalid email")),
-            (ValidationMethods::not_empty, Some("Input cannot be empty")),
-        ])
-    }
-
-    fn read_input(_prompt: &str, validator: &Validator, input: &str) -> Result<String, String> {
-        let mut cursor = Cursor::new(input);
-        let mut buffer = String::new();
-        cursor.read_line(&mut buffer).unwrap();
-        let trimmed_input = buffer.trim();
-        validator.validate(trimmed_input)?;
-        Ok(trimmed_input.to_string())
-    }
-
-    #[test]
-    fn test_read_input_valid_name() {
-        let validator = setup_name_validator();
-        let input = "John\n";
-        let result = read_input("Enter name:", &validator, input);
-        assert_eq!(result, Ok("John".to_string()));
-    }
-
-    #[test]
-    fn test_read_input_invalid_name() {
-        let validator = setup_name_validator();
-        let input = "John123\n";
-        let result = read_input("Enter name:", &validator, input);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_read_input_valid_email() {
-        let validator = setup_email_validator();
-        let input = "test@example.com\n";
-        let result = read_input("Enter email:", &validator, input);
-        assert_eq!(result, Ok("test@example.com".to_string()));
-    }
-
-    #[test]
-    fn test_read_input_invalid_email() {
-        let validator = setup_email_validator();
-        let input = "test@.com\n";
-        let result = read_input("Enter email:", &validator, input);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_read_input_not_empty() {
-        let validator = setup_name_validator();
-        let input = "non-empty\n";
-        let result = read_input("Enter input:", &validator, input);
-        assert_eq!(result, Ok("non-empty".to_string()));
-    }
-
-    #[test]
-    fn test_read_input_empty() {
-        let validator = setup_name_validator();
-        let input = "\n";
-        let result = read_input("Enter input:", &validator, input);
-        assert!(result.is_err());
+        return input.parse::<T>().map_err(|err| format!("{:?}", err));
     }
 }

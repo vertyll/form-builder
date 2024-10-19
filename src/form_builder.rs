@@ -1,21 +1,44 @@
 use crate::input::read_input;
+use crate::optional::Optional;
 use crate::validation::Validator;
 use std::collections::BTreeMap;
+use std::default::Default;
 use std::fmt::Debug;
 use std::str::FromStr;
 
+/// A builder for creating forms with various fields.
 pub struct FormBuilder {
     fields: BTreeMap<String, Box<dyn FieldTrait>>,
 }
 
 impl FormBuilder {
+    /// Creates a new `FormBuilder` instance.
+    ///
+    /// # Returns
+    ///
+    /// * A new instance of `FormBuilder`.
     pub fn new() -> Self {
         Self {
             fields: BTreeMap::new(),
         }
     }
 
-    pub fn add_field<T>(mut self, name: &str, prompt: &str, validator: Validator) -> Self
+    /// Adds a field to the form.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the field.
+    /// * `prompt` - The prompt message to be displayed to the user.
+    /// * `validator` - An optional `Validator` instance to validate the field input.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, and `Clone` traits.
+    ///
+    /// # Returns
+    ///
+    /// * The updated `FormBuilder` instance.
+    pub fn add_field<T>(mut self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
     where
         T: 'static + FromStr + Debug + Clone,
         T::Err: Debug,
@@ -31,6 +54,47 @@ impl FormBuilder {
         self
     }
 
+    /// Adds an optional field to the form.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the field.
+    /// * `prompt` - The prompt message to be displayed to the user.
+    /// * `validator` - An optional `Validator` instance to validate the field input.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, `Clone`, and `Default` traits.
+    ///
+    /// # Returns
+    ///
+    /// * The updated `FormBuilder` instance.
+    pub fn add_optional_field<T>(
+        mut self,
+        name: &str,
+        prompt: &str,
+        validator: Option<Validator>,
+    ) -> Self
+    where
+        T: 'static + FromStr + Debug + Clone + Default,
+        T::Err: Debug,
+    {
+        self.fields.insert(
+            name.to_string(),
+            Box::new(Field::<Optional<T>> {
+                prompt: prompt.to_string(),
+                validator,
+                value: None,
+            }),
+        );
+        self
+    }
+
+    /// Builds the form.
+    ///
+    /// # Returns
+    ///
+    /// * A `Form` instance containing the added fields.
     pub fn build(self) -> Form {
         Form {
             fields: self.fields,
@@ -38,11 +102,18 @@ impl FormBuilder {
     }
 }
 
+/// A struct representing a form with various fields.
 pub struct Form {
     fields: BTreeMap<String, Box<dyn FieldTrait>>,
 }
 
 impl Form {
+    /// Fills the form by prompting the user for input for each field.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if all fields are successfully filled.
+    /// * `Err(String)` if there is an error filling any field.
     pub fn fill(&mut self) -> Result<(), String> {
         for (_name, field) in &mut self.fields {
             field.fill()?;
@@ -50,31 +121,65 @@ impl Form {
         Ok(())
     }
 
+    /// Gets the value of a field.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the field.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, `Clone`, and `Default` traits.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(T)` if the field value is successfully retrieved.
+    /// * `Err(String)` if the field is not found or if the field type is incorrect.
     pub fn get_value<T>(&self, name: &str) -> Result<T, String>
     where
-        T: 'static + FromStr + Debug + Clone,
+        T: 'static + FromStr + Debug + Clone + Default,
         T::Err: Debug,
     {
         let field = self
             .fields
             .get(name)
             .ok_or_else(|| format!("Field '{}' not found", name))?;
-        field
-            .as_any()
-            .downcast_ref::<Field<T>>()
-            .ok_or_else(|| format!("Field '{}' has incorrect type", name))?
-            .get_value()
+
+        if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
+            field.get_value()
+        } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
+            field
+                .get_value()
+                .map(|opt| opt.into_inner().unwrap_or_default())
+        } else {
+            Err(format!("Field '{}' has incorrect type", name))
+        }
     }
 }
 
+/// A trait for form fields.
 trait FieldTrait {
+    /// Fills the field by prompting the user for input.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the field is successfully filled.
+    /// * `Err(String)` if there is an error filling the field.
     fn fill(&mut self) -> Result<(), String>;
+
+    /// Returns a reference to the field as a `dyn Any`.
+    ///
+    /// # Returns
+    ///
+    /// * A reference to the field as a `dyn Any`.
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
+/// A struct representing a form field.
+#[derive(Debug)]
 struct Field<T> {
     prompt: String,
-    validator: Validator,
+    validator: Option<Validator>,
     value: Option<T>,
 }
 
@@ -85,7 +190,7 @@ where
 {
     fn fill(&mut self) -> Result<(), String> {
         loop {
-            if let Ok(value) = read_input::<T>(&self.prompt, &self.validator) {
+            if let Ok(value) = read_input::<T>(&self.prompt, self.validator.as_ref()) {
                 self.value = Some(value);
                 break;
             } else {
@@ -105,6 +210,12 @@ where
     T: 'static + FromStr + Debug + Clone,
     T::Err: Debug,
 {
+    /// Gets the value of the field.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(T)` if the field value is successfully retrieved.
+    /// * `Err(String)` if the field has no value.
     fn get_value(&self) -> Result<T, String> {
         self.value
             .as_ref()
@@ -132,12 +243,18 @@ mod tests {
         ])
     }
 
-    fn read_input(_prompt: &str, validator: &Validator, input: &str) -> Result<String, String> {
+    fn read_input(
+        _prompt: &str,
+        validator: Option<&Validator>,
+        input: &str,
+    ) -> Result<String, String> {
         let mut cursor = Cursor::new(input);
         let mut buffer = String::new();
         cursor.read_line(&mut buffer).unwrap();
         let trimmed_input = buffer.trim();
-        validator.validate(trimmed_input)?;
+        if let Some(validator) = validator {
+            validator.validate(trimmed_input)?;
+        }
         Ok(trimmed_input.to_string())
     }
 
@@ -145,7 +262,7 @@ mod tests {
     fn test_read_input_valid_name() {
         let validator = setup_name_validator();
         let input = "John\n";
-        let result = read_input("Enter name:", &validator, input);
+        let result = read_input("Enter name:", Some(&validator), input);
         assert_eq!(result, Ok("John".to_string()));
     }
 
@@ -153,7 +270,7 @@ mod tests {
     fn test_read_input_invalid_name() {
         let validator = setup_name_validator();
         let input = "John123\n";
-        let result = read_input("Enter name:", &validator, input);
+        let result = read_input("Enter name:", Some(&validator), input);
         assert!(result.is_err());
     }
 
@@ -161,7 +278,7 @@ mod tests {
     fn test_read_input_valid_email() {
         let validator = setup_email_validator();
         let input = "test@example.com\n";
-        let result = read_input("Enter email:", &validator, input);
+        let result = read_input("Enter email:", Some(&validator), input);
         assert_eq!(result, Ok("test@example.com".to_string()));
     }
 
@@ -169,7 +286,7 @@ mod tests {
     fn test_read_input_invalid_email() {
         let validator = setup_email_validator();
         let input = "test@.com\n";
-        let result = read_input("Enter email:", &validator, input);
+        let result = read_input("Enter email:", Some(&validator), input);
         assert!(result.is_err());
     }
 
@@ -177,7 +294,7 @@ mod tests {
     fn test_read_input_not_empty() {
         let validator = setup_name_validator();
         let input = "non-empty\n";
-        let result = read_input("Enter input:", &validator, input);
+        let result = read_input("Enter input:", Some(&validator), input);
         assert_eq!(result, Ok("non-empty".to_string()));
     }
 
@@ -185,7 +302,7 @@ mod tests {
     fn test_read_input_empty() {
         let validator = setup_name_validator();
         let input = "\n";
-        let result = read_input("Enter input:", &validator, input);
+        let result = read_input("Enter input:", Some(&validator), input);
         assert!(result.is_err());
     }
 }
