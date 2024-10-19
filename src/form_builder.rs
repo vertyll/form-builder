@@ -33,55 +33,19 @@ impl FormBuilder {
     ///
     /// # Type Parameters
     ///
-    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, and `Clone` traits.
+    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, `Clone`, and `Default` traits.
     ///
     /// # Returns
     ///
     /// * The updated `FormBuilder` instance.
     pub fn add_field<T>(mut self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
     where
-        T: 'static + FromStr + Debug + Clone,
-        T::Err: Debug,
-    {
-        self.fields.insert(
-            name.to_string(),
-            Box::new(Field::<T> {
-                prompt: prompt.to_string(),
-                validator,
-                value: None,
-            }),
-        );
-        self
-    }
-
-    /// Adds an optional field to the form.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The name of the field.
-    /// * `prompt` - The prompt message to be displayed to the user.
-    /// * `validator` - An optional `Validator` instance to validate the field input.
-    ///
-    /// # Type Parameters
-    ///
-    /// * `T` - The type of the field value. It must implement the `FromStr`, `Debug`, `Clone`, and `Default` traits.
-    ///
-    /// # Returns
-    ///
-    /// * The updated `FormBuilder` instance.
-    pub fn add_optional_field<T>(
-        mut self,
-        name: &str,
-        prompt: &str,
-        validator: Option<Validator>,
-    ) -> Self
-    where
         T: 'static + FromStr + Debug + Clone + Default,
         T::Err: Debug,
     {
         self.fields.insert(
             name.to_string(),
-            Box::new(Field::<Optional<T>> {
+            Box::new(Field::<T> {
                 prompt: prompt.to_string(),
                 validator,
                 value: None,
@@ -148,9 +112,7 @@ impl Form {
         if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
             field.get_value()
         } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
-            field
-                .get_value()
-                .map(|opt| opt.into_inner().unwrap_or_default())
+            field.get_value().map(|opt| opt.0.unwrap_or_default())
         } else {
             Err(format!("Field '{}' has incorrect type", name))
         }
@@ -185,7 +147,7 @@ struct Field<T> {
 
 impl<T> FieldTrait for Field<T>
 where
-    T: 'static + FromStr + Debug + Clone,
+    T: 'static + FromStr + Debug + Clone + Default,
     T::Err: Debug,
 {
     fn fill(&mut self) -> Result<(), String> {

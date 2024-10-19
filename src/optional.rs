@@ -21,12 +21,6 @@ where
     }
 }
 
-impl<T> Optional<T> {
-    pub fn into_inner(self) -> Option<T> {
-        self.0
-    }
-}
-
 impl<T> Default for Optional<T> {
     fn default() -> Self {
         Optional(None)

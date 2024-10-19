@@ -1,4 +1,4 @@
-use form_builder::{FormBuilder, ValidationMethods, Validator, Optional};
+use form_builder::{FormBuilder, Optional, ValidationMethods, Validator};
 
 fn validate_custom(value: &str) -> bool {
     value.len() > 5
@@ -82,11 +82,7 @@ fn main() -> Result<(), String> {
                 Some("Score cannot be empty"),
             )])),
         )
-        .add_optional_field::<String>(
-            "nickname",
-            "Enter your nickname (optional):",
-            None, // No validation for optional field
-        )
+        .add_field::<Optional<String>>("nickname", "Enter your nickname (optional):", None)
         .build();
 
     form.fill()?;
