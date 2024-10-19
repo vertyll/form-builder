@@ -37,3 +37,27 @@ impl Validator {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ValidationMethods;
+
+    #[test]
+    fn test_validate_name() {
+        assert!(ValidationMethods::validate_name("John"));
+        assert!(!ValidationMethods::validate_name("John123"));
+    }
+
+    #[test]
+    fn test_validate_email() {
+        assert!(ValidationMethods::validate_email("test@example.com"));
+        assert!(!ValidationMethods::validate_email("test@.com"));
+        assert!(!ValidationMethods::validate_email("test@com"));
+    }
+
+    #[test]
+    fn test_not_empty() {
+        assert!(ValidationMethods::not_empty("non-empty"));
+        assert!(!ValidationMethods::not_empty(""));
+    }
+}
