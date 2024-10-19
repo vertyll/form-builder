@@ -25,7 +25,7 @@ where
     use std::io::{self, Write};
 
     loop {
-        print!("{}", prompt);
+        print!("{} ", prompt);
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
