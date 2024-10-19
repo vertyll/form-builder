@@ -2,6 +2,15 @@
 name = "form_builder"
 version = "0.1.0"
 edition = "2021"
+authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
+description = "A library for building forms with various fields and validation."
+license = "MIT"
+repository = "https://github.com/vertyll/form-builder"
+documentation = "https://docs.rs/form_builder"
+readme = "README.md"
+license-file = "LICENSE"
+keywords = ["form", "builder", "validation"]
+categories = ["data-structures", "parsing"]
 
 [dependencies]
 regex = "1"
