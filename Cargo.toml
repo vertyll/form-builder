@@ -8,8 +8,8 @@ license = "MIT"
 repository = "https://github.com/vertyll/form-builder"
 documentation = "https://docs.rs/form_builder"
 readme = "README.md"
-keywords = ["form", "builder", "validation", "io"]
-categories = ["data-structures", "parsing", "io"]
+keywords = ["form", "builder", "validation", "fields", "input"]
+categories = ["data-structures", "parsing", "command-line-utilities"]
 
 [dependencies]
 regex = "1"
