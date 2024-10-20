@@ -105,7 +105,7 @@ fn main() -> Result<(), String> {
     let nickname: Optional<String> = form.get_value("nickname")?;
 
     println!(
-        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Score: {:?}, Nickname: {}",
+        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Score: {:?}, Nickname: {:?}",
         name, email, age, custom, height, is_student, initial, score, nickname
     );
 
