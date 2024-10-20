@@ -8,7 +8,8 @@ use std::str::FromStr;
 
 /// A builder for creating forms with various fields.
 pub struct FormBuilder {
-    fields: BTreeMap<String, Box<dyn FieldTrait>>,
+    fields: BTreeMap<u32, (String, Box<dyn FieldTrait>)>,
+    counter: u32,
 }
 
 impl FormBuilder {
@@ -20,6 +21,7 @@ impl FormBuilder {
     pub fn new() -> Self {
         Self {
             fields: BTreeMap::new(),
+            counter: 0,
         }
     }
 
@@ -44,13 +46,17 @@ impl FormBuilder {
         T::Err: Debug,
     {
         self.fields.insert(
-            name.to_string(),
-            Box::new(Field::<T> {
-                prompt: prompt.to_string(),
-                validator,
-                value: None,
-            }),
+            self.counter,
+            (
+                name.to_string(),
+                Box::new(Field::<T> {
+                    prompt: prompt.to_string(),
+                    validator,
+                    value: None,
+                }),
+            ),
         );
+        self.counter += 1;
         self
     }
 
@@ -68,7 +74,7 @@ impl FormBuilder {
 
 /// A struct representing a form with various fields.
 pub struct Form {
-    fields: BTreeMap<String, Box<dyn FieldTrait>>,
+    fields: BTreeMap<u32, (String, Box<dyn FieldTrait>)>,
 }
 
 impl Form {
@@ -79,7 +85,7 @@ impl Form {
     /// * `Ok(())` if all fields are successfully filled.
     /// * `Err(String)` if there is an error filling any field.
     pub fn fill(&mut self) -> Result<(), String> {
-        for (_name, field) in &mut self.fields {
+        for (_order, (_name, field)) in &mut self.fields {
             field.fill()?;
         }
         Ok(())
@@ -106,8 +112,11 @@ impl Form {
     {
         let field = self
             .fields
-            .get(name)
-            .ok_or_else(|| format!("Field '{}' not found", name))?;
+            .values()
+            .find(|(field_name, _)| field_name == name)
+            .ok_or_else(|| format!("Field '{}' not found", name))?
+            .1
+            .as_ref();
 
         if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
             field.get_value()
