@@ -31,6 +31,16 @@ impl<T> Default for Optional<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for Optional<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Optional::None, Optional::None) => true,
+            (Optional::Some(a), Optional::Some(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 impl<T> Display for Optional<T>
 where
     T: Display,
@@ -104,5 +114,75 @@ where
             (Optional::None, Optional::Some(b)) => Optional::Some(b),
             (Optional::None, Optional::None) => Optional::None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_from_str() {
+        assert_eq!(Optional::<i32>::from_str("").unwrap(), Optional::None);
+        assert_eq!(Optional::<i32>::from_str("42").unwrap(), Optional::Some(42));
+    }
+
+    #[test]
+    fn test_default() {
+        let default_value: Optional<i32> = Default::default();
+        assert_eq!(default_value, Optional::None);
+    }
+
+    #[test]
+    fn test_display() {
+        let some_value = Optional::Some(42);
+        let none_value: Optional<i32> = Optional::None;
+        assert_eq!(format!("{}", some_value), "42");
+        assert_eq!(format!("{}", none_value), "None");
+    }
+
+    #[test]
+    fn test_add() {
+        let a = Optional::Some(2);
+        let b = Optional::Some(3);
+        let none: Optional<i32> = Optional::None;
+        assert_eq!(a.clone() + b.clone(), Optional::Some(5));
+        assert_eq!(a.clone() + none.clone(), Optional::Some(2));
+        assert_eq!(none.clone() + b.clone(), Optional::Some(3));
+        assert_eq!(none.clone() + none.clone(), Optional::None);
+    }
+
+    #[test]
+    fn test_sub() {
+        let a = Optional::Some(5);
+        let b = Optional::Some(3);
+        let none: Optional<i32> = Optional::None;
+        assert_eq!(a.clone() - b.clone(), Optional::Some(2));
+        assert_eq!(a.clone() - none.clone(), Optional::Some(5));
+        assert_eq!(none.clone() - b.clone(), Optional::Some(3));
+        assert_eq!(none.clone() - none.clone(), Optional::None);
+    }
+
+    #[test]
+    fn test_mul() {
+        let a = Optional::Some(2);
+        let b = Optional::Some(3);
+        let none: Optional<i32> = Optional::None;
+        assert_eq!(a.clone() * b.clone(), Optional::Some(6));
+        assert_eq!(a.clone() * none.clone(), Optional::Some(2));
+        assert_eq!(none.clone() * b.clone(), Optional::Some(3));
+        assert_eq!(none.clone() * none.clone(), Optional::None);
+    }
+
+    #[test]
+    fn test_div() {
+        let a = Optional::Some(6);
+        let b = Optional::Some(3);
+        let none: Optional<i32> = Optional::None;
+        assert_eq!(a.clone() / b.clone(), Optional::Some(2));
+        assert_eq!(a.clone() / none.clone(), Optional::Some(6));
+        assert_eq!(none.clone() / b.clone(), Optional::Some(3));
+        assert_eq!(none.clone() / none.clone(), Optional::None);
     }
 }

@@ -200,6 +200,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::validation::{ValidationMethods, Validator};
     use std::io::{BufRead, Cursor};
 
@@ -278,5 +279,14 @@ mod tests {
         let input = "\n";
         let result = read_input("Enter input:", Some(&validator), input);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_field() {
+        let form_builder = FormBuilder::new()
+            .add_field::<String>("name", "Enter your name:", None)
+            .add_field::<String>("email", "Enter your email:", None);
+        let form = form_builder.build();
+        assert_eq!(form.fields.len(), 2);
     }
 }
