@@ -4,6 +4,17 @@ use regex::Regex;
 pub struct ValidationMethods;
 
 impl ValidationMethods {
+    // Define regex patterns as constants
+    const EMAIL_REGEX: &'static str = r"^[\w\.-]+@[\w\.-]+\.\w+$";
+    const DATE_REGEX: &'static str = r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$";
+    const TIME_REGEX: &'static str = r"^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$";
+    const URL_REGEX: &'static str = r"^(http|https)://[^\s/$.?#].[^\s]*$";
+    const PHONE_REGEX: &'static str = r"^\+?[1-9]\d{1,14}$";
+    const POSTAL_CODE_REGEX: &'static str = r"^\d{5}(-\d{4})?$";
+    const CREDIT_CARD_REGEX: &'static str = r"^\d{4}-?\d{4}-?\d{4}-?\d{4}$";
+    const UUID_REGEX: &'static str =
+        r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+
     /// Validates that the name does not contain any numeric characters.
     ///
     /// # Arguments
@@ -27,7 +38,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the email is in a valid format, `false` otherwise.
     pub fn validate_email(email: &str) -> bool {
-        let email_regex = Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").unwrap();
+        let email_regex = Regex::new(Self::EMAIL_REGEX).unwrap();
         email_regex.is_match(email)
     }
 
@@ -121,7 +132,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a date format, `false` otherwise.
     pub fn is_date(value: &str) -> bool {
-        let date_regex = Regex::new(r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$").unwrap();
+        let date_regex = Regex::new(Self::DATE_REGEX).unwrap();
         date_regex.is_match(value)
     }
 
@@ -135,7 +146,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a time format, `false` otherwise.
     pub fn is_time(value: &str) -> bool {
-        let time_regex = Regex::new(r"^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$").unwrap();
+        let time_regex = Regex::new(Self::TIME_REGEX).unwrap();
         time_regex.is_match(value)
     }
 
@@ -149,7 +160,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a URL format, `false` otherwise.
     pub fn is_url(value: &str) -> bool {
-        let url_regex = Regex::new(r"^(http|https)://[^\s/$.?#].[^\s]*$").unwrap();
+        let url_regex = Regex::new(Self::URL_REGEX).unwrap();
         url_regex.is_match(value)
     }
 
@@ -163,7 +174,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a phone number format, `false` otherwise.
     pub fn is_phone_number(value: &str) -> bool {
-        let phone_regex = Regex::new(r"^\+?[1-9]\d{1,14}$").unwrap();
+        let phone_regex = Regex::new(Self::PHONE_REGEX).unwrap();
         phone_regex.is_match(value)
     }
 
@@ -177,7 +188,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a postal code format, `false` otherwise.
     pub fn is_postal_code(value: &str) -> bool {
-        let postal_code_regex = Regex::new(r"^\d{5}(-\d{4})?$").unwrap();
+        let postal_code_regex = Regex::new(Self::POSTAL_CODE_REGEX).unwrap();
         postal_code_regex.is_match(value)
     }
 
@@ -191,7 +202,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a credit card number format, `false` otherwise.
     pub fn is_credit_card(value: &str) -> bool {
-        let credit_card_regex = Regex::new(r"^\d{4}-?\d{4}-?\d{4}-?\d{4}$").unwrap();
+        let credit_card_regex = Regex::new(Self::CREDIT_CARD_REGEX).unwrap();
         credit_card_regex.is_match(value)
     }
 
@@ -205,10 +216,7 @@ impl ValidationMethods {
     ///
     /// * `true` if the value is in a UUID format, `false` otherwise.
     pub fn is_uuid(value: &str) -> bool {
-        let uuid_regex = Regex::new(
-            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-        )
-        .unwrap();
+        let uuid_regex = Regex::new(Self::UUID_REGEX).unwrap();
         uuid_regex.is_match(value)
     }
 }
