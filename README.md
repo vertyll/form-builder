@@ -89,7 +89,7 @@ fn main() -> Result<(), String> {
                 Some("Score cannot be empty"),
             )])),
         )
-        .add_field::<Optional<String>>("nickname", "Enter your nickname (optional):", None)
+        .add_field::<Optional<u32>>("width", "Enter width (optional):", None)
         .build();
 
     form.fill()?;
@@ -102,14 +102,23 @@ fn main() -> Result<(), String> {
     let is_student: bool = form.get_value("is_student")?;
     let initial: char = form.get_value("initial")?;
     let score: i32 = form.get_value("score")?;
-    let nickname: Optional<String> = form.get_value("nickname")?;
+    let width: Optional<u32> = form.get_value("width")?;
+
+    let width = process_width(width);
 
     println!(
-        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Score: {:?}, Nickname: {:?}",
-        name, email, age, custom, height, is_student, initial, score, nickname
+        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Score: {:?}, Width: {:?}",
+        name, email, age, custom, height, is_student, initial, score, width
     );
 
     Ok(())
+}
+
+fn process_width(width: Optional<u32>) -> u32 {
+    match width {
+        Optional::Some(value) => value + 20,
+        Optional::None => 0,
+    }
 }
 ```
 
