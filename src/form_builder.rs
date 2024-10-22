@@ -121,7 +121,10 @@ impl Form {
         if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
             field.get_value()
         } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
-            field.get_value().map(|opt| opt.0.unwrap_or_default())
+            field.get_value().map(|opt| match opt {
+                Optional::Some(value) => value,
+                Optional::None => T::default(),
+            })
         } else {
             Err(format!("Field '{}' has incorrect type", name))
         }
