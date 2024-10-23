@@ -81,14 +81,6 @@ fn main() -> Result<(), String> {
                 Some("Initial cannot be empty"),
             )])),
         )
-        .add_field::<i32>(
-            "score",
-            "Enter your score:",
-            Some(Validator::new(vec![(
-                ValidationMethods::not_empty,
-                Some("Score cannot be empty"),
-            )])),
-        )
         .add_field::<Optional<u32>>("width", "Enter width (optional):", None)
         .build();
 
@@ -101,14 +93,13 @@ fn main() -> Result<(), String> {
     let height: f64 = form.get_value("height")?;
     let is_student: bool = form.get_value("is_student")?;
     let initial: char = form.get_value("initial")?;
-    let score: i32 = form.get_value("score")?;
     let width: Optional<u32> = form.get_value("width")?;
 
     let width = process_width(width);
 
     println!(
-        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Score: {:?}, Width: {:?}",
-        name, email, age, custom, height, is_student, initial, score, width
+        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Width: {:?}",
+        name, email, age, custom, height, is_student, initial, width
     );
 
     Ok(())
