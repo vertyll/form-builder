@@ -13,3 +13,4 @@ categories = ["data-structures", "parsing", "command-line-utilities"]
 
 [dependencies]
 regex = "1"
+libc = "0.2"
