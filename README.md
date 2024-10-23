@@ -137,3 +137,12 @@ fn process_width(width: Optional<u32>) -> u32 {
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+## Dependency Licenses
+
+This project uses the following packages under the MIT license:
+
+- [regex](https://github.com/rust-lang/regex) - MIT License
+- [libc](https://github.com/rust-lang/libc) - MIT License
+
+Each of these packages includes an MIT license file, which can be found in their repositories.
