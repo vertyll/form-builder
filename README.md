@@ -82,6 +82,25 @@ fn main() -> Result<(), String> {
             )])),
         )
         .add_field::<Optional<u32>>("width", "Enter width (optional):", None)
+        .add_select(
+            "gender",
+            "Select your gender:",
+            vec![
+                ("M".to_string(), "Male".to_string()),
+                ("F".to_string(), "Female".to_string()),
+                ("O".to_string(), "Other".to_string()),
+            ],
+        )
+        .add_multiselect(
+            "hobbies",
+            "Select your hobbies:",
+            vec![
+                ("reading".to_string(), "Reading".to_string()),
+                ("sports".to_string(), "Sports".to_string()),
+                ("music".to_string(), "Music".to_string()),
+            ],
+            Some(2),
+        )
         .build();
 
     form.fill()?;
@@ -94,12 +113,14 @@ fn main() -> Result<(), String> {
     let is_student: bool = form.get_value("is_student")?;
     let initial: char = form.get_value("initial")?;
     let width: Optional<u32> = form.get_value("width")?;
+    let gender: String = form.get_value("gender")?;
+    let hobbies: Vec<String> = form.get_value_vec("hobbies")?;
 
     let width = process_width(width);
 
     println!(
-        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Width: {:?}",
-        name, email, age, custom, height, is_student, initial, width
+        "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Width: {:?}, Gender: {:?}, Hobbies: {:?}",
+        name, email, age, custom, height, is_student, initial, width, gender, hobbies
     );
 
     Ok(())
