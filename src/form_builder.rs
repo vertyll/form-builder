@@ -75,7 +75,11 @@ impl FormBuilder {
     /// # Returns
     ///
     /// * The updated `FormBuilder` instance.
-    pub fn add_select(mut self, name: &str, prompt: &str, options: Vec<(String, String)>) -> Self {
+    pub fn add_select<T>(mut self, name: &str, prompt: &str, options: Vec<(T, String)>) -> Self
+    where
+        T: 'static + Clone + PartialEq + Debug + FromStr,
+        T::Err: Debug,
+    {
         self.fields.insert(
             self.counter,
             (
@@ -103,13 +107,17 @@ impl FormBuilder {
     /// # Returns
     ///
     /// * The updated `FormBuilder` instance.
-    pub fn add_multiselect(
+    pub fn add_multiselect<T>(
         mut self,
         name: &str,
         prompt: &str,
-        options: Vec<(String, String)>,
+        options: Vec<(T, String)>,
         limit: Option<usize>,
-    ) -> Self {
+    ) -> Self
+    where
+        T: 'static + Clone + PartialEq + Debug + FromStr,
+        T::Err: Debug,
+    {
         self.fields.insert(
             self.counter,
             (
@@ -173,7 +181,7 @@ impl Form {
     /// * `Err(String)` if the field is not found or if the field type is incorrect.
     pub fn get_value<T>(&self, name: &str) -> Result<T, String>
     where
-        T: 'static + FromStr + Debug + Clone + Default,
+        T: 'static + FromStr + Debug + Clone + Default + PartialEq, // Add PartialEq here
         T::Err: Debug,
     {
         let field = self
@@ -191,11 +199,11 @@ impl Form {
                 Optional::Some(value) => value,
                 Optional::None => T::default(),
             })
-        } else if let Some(field) = field.as_any().downcast_ref::<SelectField>() {
+        } else if let Some(field) = field.as_any().downcast_ref::<SelectField<T>>() {
             field
                 .get_value()
                 .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))
-        } else if let Some(field) = field.as_any().downcast_ref::<MultiselectField>() {
+        } else if let Some(field) = field.as_any().downcast_ref::<MultiselectField<T>>() {
             field
                 .get_value()
                 .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))
@@ -204,7 +212,11 @@ impl Form {
         }
     }
 
-    pub fn get_value_vec(&self, name: &str) -> Result<Vec<String>, String> {
+    pub fn get_value_vec<T>(&self, name: &str) -> Result<Vec<T>, String>
+    where
+        T: 'static + FromStr + Debug + Clone + Default + PartialEq,
+        T::Err: Debug,
+    {
         let field = self
             .fields
             .values()
@@ -213,8 +225,27 @@ impl Form {
             .1
             .as_ref();
 
-        if let Some(field) = field.as_any().downcast_ref::<MultiselectField>() {
-            Ok(field.value.clone())
+        if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
+            Ok(vec![field.get_value()?]) // Wrap single value in a Vec
+        } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
+            let value = field.get_value()?;
+            match value {
+                Optional::Some(v) => Ok(vec![v]),
+                Optional::None => Ok(vec![T::default()]), // Or return an empty Vec based on your needs
+            }
+        } else if let Some(field) = field.as_any().downcast_ref::<SelectField<T>>() {
+            let value = field
+                .get_value()
+                .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))?;
+            Ok(vec![value])
+        } else if let Some(field) = field.as_any().downcast_ref::<MultiselectField<T>>() {
+            let value = field.get_value()?;
+            let value = value.trim_matches(|c| c == '[' || c == ']').to_string();
+            let values: Result<Vec<T>, _> = value
+                .split(',')
+                .map(|s| s.trim_matches(|c| c == '"' || c == ' ').parse::<T>())
+                .collect();
+            values.map_err(|e| format!("{:?}", e))
         } else {
             Err(format!("Field '{}' has incorrect type", name))
         }
@@ -305,15 +336,19 @@ where
 
 /// A struct representing a select field.
 #[derive(Debug)]
-struct SelectField {
+struct SelectField<T> {
     prompt: String,
-    options: Vec<(String, String)>,
-    value: Option<String>,
+    options: Vec<(T, String)>, // Dowolna wartość T + opis w String
+    value: Option<T>,
 }
 
-impl FieldTrait for SelectField {
+impl<T> FieldTrait for SelectField<T>
+where
+    T: 'static + Clone + PartialEq + Debug + FromStr,
+    T::Err: Debug,
+{
     fn fill(&mut self) -> Result<(), String> {
-        self.value = Some(read_select(&self.prompt, &self.options)?);
+        self.value = Some(read_select::<T>(&self.prompt, &self.options)?);
         Ok(())
     }
 
@@ -325,20 +360,24 @@ impl FieldTrait for SelectField {
         self.value
             .as_ref()
             .ok_or_else(|| format!("Field has no value"))
-            .map(|v| v.clone())
+            .map(|v| format!("{:?}", v))
     }
 }
 
 /// A struct representing a multiselect field.
 #[derive(Debug)]
-struct MultiselectField {
+struct MultiselectField<T> {
     prompt: String,
-    options: Vec<(String, String)>,
-    value: Vec<String>,
+    options: Vec<(T, String)>,
+    value: Vec<T>,
     limit: Option<usize>,
 }
 
-impl FieldTrait for MultiselectField {
+impl<T> FieldTrait for MultiselectField<T>
+where
+    T: 'static + Clone + PartialEq + Debug + FromStr,
+    T::Err: Debug,
+{
     fn fill(&mut self) -> Result<(), String> {
         self.value = read_multiselect(&self.prompt, &self.options, self.limit)?;
         Ok(())
@@ -349,7 +388,7 @@ impl FieldTrait for MultiselectField {
     }
 
     fn get_value(&self) -> Result<String, String> {
-        Ok(self.value.join(","))
+        Ok(format!("{:?}", self.value))
     }
 }
 
@@ -397,18 +436,22 @@ fn read_key_raw() -> Result<Key, String> {
     }
 }
 
-fn read_select(prompt: &str, options: &[(String, String)]) -> Result<String, String> {
+fn read_select<T>(prompt: &str, options: &[(T, String)]) -> Result<T, String>
+where
+    T: Clone + PartialEq + Debug + FromStr,
+    T::Err: Debug,
+{
     let mut selected = 0;
 
     loop {
         clear_screen();
         println!("{}:", prompt);
 
-        for (i, (key, value)) in options.iter().enumerate() {
+        for (i, (_, value)) in options.iter().enumerate() {
             if i == selected {
-                println!("> {}: {}", key, value);
+                println!("> {}", value);
             } else {
-                println!("  {}: {}", key, value);
+                println!("  {}", value);
             }
         }
         if io::stdout().flush().is_err() {
@@ -435,11 +478,15 @@ fn read_select(prompt: &str, options: &[(String, String)]) -> Result<String, Str
     }
 }
 
-fn read_multiselect(
+fn read_multiselect<T>(
     prompt: &str,
-    options: &[(String, String)],
+    options: &[(T, String)],
     limit: Option<usize>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<T>, String>
+where
+    T: Clone + PartialEq + Debug + FromStr,
+    T::Err: Debug,
+{
     let mut selected = 0;
     let mut selected_options = vec![false; options.len()];
 
@@ -448,12 +495,12 @@ fn read_multiselect(
         println!("{}:", prompt);
         println!("Use Space to select/deselect, Enter to confirm");
 
-        for (i, (key, value)) in options.iter().enumerate() {
+        for (i, (_, value)) in options.iter().enumerate() {
             let marker = if selected_options[i] { "*" } else { " " };
             if i == selected {
-                println!("> [{}] {}: {}", marker, key, value);
+                println!("> [{}] {}", marker, value);
             } else {
-                println!("  [{}] {}: {}", marker, key, value);
+                println!("  [{}] {}", marker, value);
             }
         }
         if io::stdout().flush().is_err() {
@@ -481,7 +528,7 @@ fn read_multiselect(
                 }
             }
             Key::Enter => {
-                let selected_keys: Vec<String> = options
+                let selected_keys: Vec<T> = options
                     .iter()
                     .enumerate()
                     .filter(|(i, _)| selected_options[*i])

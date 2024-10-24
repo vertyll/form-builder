@@ -84,9 +84,9 @@
 //!            "gender",
 //!            "Select your gender:",
 //!            vec![
-//!                ("M".to_string(), "Male".to_string()),
-//!                ("F".to_string(), "Female".to_string()),
-//!                ("O".to_string(), "Other".to_string()),
+//!                (2u32, "Male".to_string()),
+//!                (3u32, "Female".to_string()),
+//!                (4u32, "Other".to_string()),
 //!            ],
 //!        )
 //!        .add_multiselect(
@@ -111,7 +111,7 @@
 //!    let is_student: bool = form.get_value("is_student")?;
 //!    let initial: char = form.get_value("initial")?;
 //!    let width: Optional<u32> = form.get_value("width")?;
-//!    let gender: String = form.get_value("gender")?;
+//!    let gender: u32 = form.get_value("gender")?;
 //!    let hobbies: Vec<String> = form.get_value_vec("hobbies")?;
 //!
 //!    let width = process_width(width);
