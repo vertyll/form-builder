@@ -75,11 +75,12 @@ impl FormBuilder {
     /// # Returns
     ///
     /// * The updated `FormBuilder` instance.
-    pub fn add_select<T>(mut self, name: &str, prompt: &str, options: Vec<(T, String)>) -> Self
+    pub fn add_select<T>(mut self, name: &str, prompt: &str, options: Vec<(T, &str)>) -> Self
     where
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
+        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
         self.fields.insert(
             self.counter,
             (
@@ -111,13 +112,14 @@ impl FormBuilder {
         mut self,
         name: &str,
         prompt: &str,
-        options: Vec<(T, String)>,
+        options: Vec<(T, &str)>,
         limit: Option<usize>,
     ) -> Self
     where
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
+        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
         self.fields.insert(
             self.counter,
             (
@@ -643,9 +645,9 @@ mod tests {
             "gender",
             "Select your gender:",
             vec![
-                ("M".to_string(), "Male".to_string()),
-                ("F".to_string(), "Female".to_string()),
-                ("O".to_string(), "Other".to_string()),
+                ("M".to_string(), "Male"),
+                ("F".to_string(), "Female"),
+                ("O".to_string(), "Other"),
             ],
         );
         let form = form_builder.build();
@@ -658,9 +660,9 @@ mod tests {
             "hobbies",
             "Select your hobbies:",
             vec![
-                ("reading".to_string(), "Reading".to_string()),
-                ("sports".to_string(), "Sports".to_string()),
-                ("music".to_string(), "Music".to_string()),
+                ("reading".to_string(), "Reading"),
+                ("sports".to_string(), "Sports"),
+                ("music".to_string(), "Music"),
             ],
             Some(2),
         );
