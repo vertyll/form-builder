@@ -2,6 +2,27 @@
 
 A library for building forms with various fields and validation.
 
+## Overview
+
+`form_builder` is a Rust library designed to simplify the creation and validation of forms. It provides a flexible way to define forms with different types of fields, including text fields, select fields, and multiselect fields. The library also supports custom validation for these fields, making it easy to ensure that user input meets specific criteria.
+
+## Features
+
+- **Flexible Form Creation**: Easily create forms with various types of fields.
+- **Custom Validation**: Define custom validation rules for each field.
+- **Optional Fields**: Support for optional fields using the `Optional` type.
+- **Select and Multiselect Fields**: Built-in support for select and multiselect fields.
+- **Comprehensive Error Handling**: Detailed error messages for validation failures.
+
+## Installation
+
+To use `form_builder` in your project, add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+form_builder = "1.0.0"
+```
+
 ## Example
 
 ```rust
@@ -134,6 +155,10 @@ fn process_width(width: Optional<u32>) -> u32 {
 }
 ```
 
+## Documentation
+
+For more detailed documentation, including all available methods and examples, please refer to the [API documentation](https://docs.rs/form_builder).
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
@@ -146,3 +171,15 @@ This project uses the following packages under the MIT license:
 - [libc](https://github.com/rust-lang/libc) - MIT License
 
 Each of these packages includes an MIT license file, which can be found in their repositories.
+
+## Contributing
+
+Contributions are welcome! If you find a bug or have a feature request, please open an issue on GitHub. If you would like to contribute code, please fork the repository and submit a pull request.
+
+## Acknowledgements
+
+Special thanks to the Rust community for their support and contributions to the ecosystem. This library would not be possible without the hard work and dedication of many individuals.
+
+## Contact
+
+For questions or feedback, please contact the maintainer at [gawrmiko@gmail.com]

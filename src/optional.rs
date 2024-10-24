@@ -5,7 +5,9 @@ use std::str::FromStr;
 /// An optional value that can be `Some` or `None`.
 #[derive(Debug, Clone)]
 pub enum Optional<T> {
+    /// Contains a value of type `T`.
     Some(T),
+    /// Represents the absence of a value.
     None,
 }
 
@@ -16,6 +18,13 @@ where
 {
     type Err = T::Err;
 
+    /// Parses a string `s` to produce an `Optional<T>`.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Optional::None)` if the string is empty.
+    /// * `Ok(Optional::Some(T))` if the string can be parsed to `T`.
+    /// * `Err(T::Err)` if the string cannot be parsed to `T`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
             Ok(Optional::None)
@@ -26,12 +35,19 @@ where
 }
 
 impl<T> Default for Optional<T> {
+    /// Returns the default value for `Optional<T>`, which is `Optional::None`.
     fn default() -> Self {
         Optional::None
     }
 }
 
 impl<T: PartialEq> PartialEq for Optional<T> {
+    /// Checks if two `Optional<T>` values are equal.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if both are `Optional::None` or both are `Optional::Some` with equal values.
+    /// * `false` otherwise.
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Optional::None, Optional::None) => true,
@@ -45,6 +61,12 @@ impl<T> Display for Optional<T>
 where
     T: Display,
 {
+    /// Formats the value using the given formatter.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the value is successfully formatted.
+    /// * `Err(fmt::Error)` if there is an error formatting the value.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Optional::Some(value) => write!(f, "{}", value),
@@ -59,6 +81,13 @@ where
 {
     type Output = Self;
 
+    /// Adds two `Optional<T>` values.
+    ///
+    /// # Returns
+    ///
+    /// * `Optional::Some(a + b)` if both are `Optional::Some`.
+    /// * `Optional::Some(a)` if one is `Optional::None`.
+    /// * `Optional::None` if both are `Optional::None`.
     fn add(self, other: Self) -> Self {
         match (self, other) {
             (Optional::Some(a), Optional::Some(b)) => Optional::Some(a + b),
@@ -75,6 +104,13 @@ where
 {
     type Output = Self;
 
+    /// Subtracts two `Optional<T>` values.
+    ///
+    /// # Returns
+    ///
+    /// * `Optional::Some(a - b)` if both are `Optional::Some`.
+    /// * `Optional::Some(a)` if one is `Optional::None`.
+    /// * `Optional::None` if both are `Optional::None`.
     fn sub(self, other: Self) -> Self {
         match (self, other) {
             (Optional::Some(a), Optional::Some(b)) => Optional::Some(a - b),
@@ -91,6 +127,13 @@ where
 {
     type Output = Self;
 
+    /// Multiplies two `Optional<T>` values.
+    ///
+    /// # Returns
+    ///
+    /// * `Optional::Some(a * b)` if both are `Optional::Some`.
+    /// * `Optional::Some(a)` if one is `Optional::None`.
+    /// * `Optional::None` if both are `Optional::None`.
     fn mul(self, other: Self) -> Self {
         match (self, other) {
             (Optional::Some(a), Optional::Some(b)) => Optional::Some(a * b),
@@ -107,6 +150,13 @@ where
 {
     type Output = Self;
 
+    /// Divides two `Optional<T>` values.
+    ///
+    /// # Returns
+    ///
+    /// * `Optional::Some(a / b)` if both are `Optional::Some`.
+    /// * `Optional::Some(a)` if one is `Optional::None`.
+    /// * `Optional::None` if both are `Optional::None`.
     fn div(self, other: Self) -> Self {
         match (self, other) {
             (Optional::Some(a), Optional::Some(b)) => Optional::Some(a / b),
