@@ -80,7 +80,10 @@ impl FormBuilder {
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
-        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
+        let options = options
+            .into_iter()
+            .map(|(v, s)| (v, s.to_string()))
+            .collect();
         self.fields.insert(
             self.counter,
             (
@@ -119,7 +122,10 @@ impl FormBuilder {
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
-        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
+        let options = options
+            .into_iter()
+            .map(|(v, s)| (v, s.to_string()))
+            .collect();
         self.fields.insert(
             self.counter,
             (
@@ -644,6 +650,17 @@ mod tests {
         let form_builder = FormBuilder::new().add_select(
             "gender",
             "Select your gender:",
+            vec![(1u32, "Male"), (2u32, "Female"), (3u32, "Other")],
+        );
+        let form = form_builder.build();
+        assert_eq!(form.fields.len(), 1);
+    }
+
+    #[test]
+    fn test_add_select_u32() {
+        let form_builder = FormBuilder::new().add_select(
+            "gender",
+            "Select your gender:",
             vec![
                 ("M".to_string(), "Male"),
                 ("F".to_string(), "Female"),
@@ -664,6 +681,18 @@ mod tests {
                 ("sports".to_string(), "Sports"),
                 ("music".to_string(), "Music"),
             ],
+            Some(2),
+        );
+        let form = form_builder.build();
+        assert_eq!(form.fields.len(), 1);
+    }
+
+    #[test]
+    fn test_add_multiselect_u32() {
+        let form_builder = FormBuilder::new().add_multiselect(
+            "hobbies",
+            "Select your hobbies:",
+            vec![(1u32, "1"), (2u32, "2"), (3u32, "3")],
             Some(2),
         );
         let form = form_builder.build();
