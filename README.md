@@ -86,18 +86,18 @@ fn main() -> Result<(), String> {
             "gender",
             "Select your gender:",
             vec![
-                (2u32, "Male".to_string()),
-                (3u32, "Female".to_string()),
-                (4u32, "Other".to_string()),
+                (1u32, "Male"),
+                (2u32, "Female"),
+                (3u32, "Other"),
             ],
         )
         .add_multiselect(
             "hobbies",
             "Select your hobbies:",
             vec![
-                ("reading".to_string(), "Reading".to_string()),
-                ("sports".to_string(), "Sports".to_string()),
-                ("music".to_string(), "Music".to_string()),
+                ("reading".to_string(), "Reading"),
+                ("sports".to_string(), "Sports"),
+                ("music".to_string(), "Music"),
             ],
             Some(2),
         )
