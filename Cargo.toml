@@ -1,6 +1,6 @@
 [package]
 name = "form_builder"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
 description = "A library for building forms with various fields and validation."
@@ -12,5 +12,5 @@ keywords = ["form", "builder", "validation", "fields", "input"]
 categories = ["data-structures", "parsing", "command-line-utilities"]
 
 [dependencies]
-regex = "1"
+regex = "1.11.1"
 libc = "0.2"
