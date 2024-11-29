@@ -34,14 +34,14 @@ where
             .map_err(|e| format!("Failed to flush stdout: {:?}", e))?;
 
         let mut input = String::new();
-        io::stdin()
+        stdin()
             .read_line(&mut input)
             .map_err(|e| format!("Failed to read line: {:?}", e))?;
         let input = input.trim();
 
         if let Some(validator) = validator {
             if let Err(err) = validator.validate(input) {
-                println!("{}", err);
+                eprintln!("{}", err);
                 continue;
             }
         }
@@ -231,7 +231,7 @@ pub fn read_key_raw() -> Result<Key, String> {
     }
 
     let mut buffer = [0; 1];
-    if io::stdin().read_exact(&mut buffer).is_err() {
+    if stdin().read_exact(&mut buffer).is_err() {
         return Err("Failed to read from stdin".to_string());
     }
 

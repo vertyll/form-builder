@@ -57,7 +57,7 @@ where
                 self.value = Some(value);
                 break;
             } else {
-                println!("Invalid input. Please try again.");
+                eprintln!("Invalid input. Please try again.");
             }
         }
         Ok(())
@@ -81,7 +81,7 @@ where
     fn get_value(&self) -> Result<String, String> {
         self.value
             .as_ref()
-            .ok_or_else(|| format!("Field has no value"))
+            .ok_or_else(|| "Field has no value".to_string())
             .map(|v| format!("{:?}", v))
     }
 }
@@ -100,7 +100,7 @@ where
     pub fn get_value(&self) -> Result<T, String> {
         self.value
             .as_ref()
-            .ok_or_else(|| format!("Field has no value"))
+            .ok_or_else(|| "Field has no value".to_string())
             .map(|v| v.clone())
     }
 }

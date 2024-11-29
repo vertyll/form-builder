@@ -50,7 +50,7 @@ where
         // Return the value of the field as a string
         self.value
             .as_ref()
-            .ok_or_else(|| format!("Field has no value"))
+            .ok_or_else(|| "Field has no value".to_string())
             .map(|v| format!("{:?}", v))
     }
 }
