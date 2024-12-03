@@ -20,7 +20,7 @@ To use `form_builder` in your project, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-form_builder = "1.0.0"
+form_builder = "1.1.1"
 ```
 
 ## Example
