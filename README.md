@@ -20,7 +20,7 @@ To use `form_builder` in your project, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-form_builder = "1.1.1"
+form_builder = "LATEST_VERSION"
 ```
 
 ## Example
@@ -179,7 +179,3 @@ Contributions are welcome! If you find a bug or have a feature request, please o
 ## Acknowledgements
 
 Special thanks to the Rust community for their support and contributions to the ecosystem. This library would not be possible without the hard work and dedication of many individuals.
-
-## Contact
-
-For questions or feedback, please contact the maintainer at [gawrmiko@gmail.com]
