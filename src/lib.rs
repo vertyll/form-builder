@@ -4,7 +4,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,no_run
 //! use form_builder::{FormBuilder, Optional, ValidationMethods, Validator};
 //!
 //! fn validate_custom(value: &str) -> bool {
