@@ -1,10 +1,10 @@
-# form_builder
+# Form Builder
 
 A library for building forms with various fields and validation.
 
 ## Overview
 
-`form_builder` is a Rust library designed to simplify the creation and validation of forms. It provides a flexible way to define forms with different types of fields, including text fields, select fields, and multiselect fields. The library also supports custom validation for these fields, making it easy to ensure that user input meets specific criteria.
+Form Builder is a Rust library designed to simplify the creation and validation of forms. It provides a flexible way to define forms with different types of fields, including text fields, select fields, and multiselect fields. The library also supports custom validation for these fields, making it easy to ensure that user input meets specific criteria.
 
 ## Features
 
@@ -17,7 +17,6 @@ A library for building forms with various fields and validation.
 ## Installation
 
 To use `form_builder` in your project, add the following to your `Cargo.toml`:
-
 ```toml
 [dependencies]
 form_builder = "LATEST_VERSION"
