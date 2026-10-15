@@ -117,6 +117,9 @@ followed by that error, and the field asks again.
 
 ## Input
 
+A choice is drawn where the form is, below the earlier answers, and leaves one line with the answer, such as
+`Plan: Pro`, where 1.x cleared the whole screen for each key.
+
 The `input` module and its functions are private. To fill a form from something other than the terminal, such as
 answers replayed in a test, implement `Console` and call `form.fill_with(&mut console)`; `Terminal` is the console
 `fill` uses.
