@@ -1,8 +1,10 @@
 //! A type filled from a form: what `#[derive(Form)]` implements.
 
 use crate::Error;
-use crate::console::{Console, Terminal};
-use crate::form::{Form, FormBuilder};
+use crate::builder::FormBuilder;
+use crate::console::Console;
+use crate::form::Form;
+use crate::terminal::Terminal;
 
 /// A type whose values a form asks for, field by field, as `#[derive(Form)]` writes it with the `derive` feature.
 ///

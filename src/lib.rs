@@ -43,7 +43,10 @@
 //! command line, where nobody can, and a console that replays answers tests it. With the `derive` feature,
 //! `#[derive(Form)]` asks for a struct field by field, through [`FromForm`].
 
+mod asking;
+mod builder;
 mod console;
+mod drawing;
 mod error;
 mod fields;
 mod form;
@@ -51,16 +54,19 @@ mod from_form;
 mod preset;
 mod prompt;
 mod selection;
+mod terminal;
 pub mod validate;
 
-pub use console::{Choice, Console, Terminal};
+pub use builder::FormBuilder;
+pub use console::{Choice, Console};
 pub use error::Error;
 pub use fields::{Confirm, Field, MultiSelect, Password, Select, Text};
-pub use form::{Answers, Form, FormBuilder};
+pub use form::{Answers, Form};
 #[cfg(feature = "derive")]
 pub use form_builder_derive::Form;
 pub use from_form::FromForm;
 pub use preset::Preset;
 pub use prompt::{Messages, Prompt};
 pub use selection::Mode;
+pub use terminal::Terminal;
 pub use validate::Validator;
