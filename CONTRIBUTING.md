@@ -51,6 +51,13 @@ pull request does one thing, says why, and needs CI to pass before it is merged.
 written as a commit message above, becomes the one commit on `main` and the line of the release notes that names the
 change.
 
+## Releasing
+
+A release is an annotated tag on `main`, `vX.Y.Z`, made once the version in both `Cargo.toml` files and the
+[Changelog](CHANGELOG.md) are raised. The tag runs CI again; when it passes, CI publishes the GitHub release, its notes
+generated from the pull requests merged since the last tag. The crates are published to crates.io by hand, with
+`cargo publish --workspace`, which publishes `form_builder_derive` first.
+
 ## License
 
 By contributing, you agree that your contribution is released under the [MIT License](LICENSE), as the rest of Form
