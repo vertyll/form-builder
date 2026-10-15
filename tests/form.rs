@@ -264,3 +264,10 @@ fn required_fields_are_marked_unless_asked_not_to() {
         assert_eq!(console.prompts, want);
     }
 }
+
+#[test]
+fn a_form_can_move_to_another_thread() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<form_builder::Form>();
+    assert_send_sync::<FormBuilder>();
+}

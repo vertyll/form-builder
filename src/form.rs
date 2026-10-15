@@ -59,7 +59,7 @@ impl FormBuilder {
     /// Adds a required [`Text`] field parsed into a `T`, checked by `validator` when given.
     pub fn add_field<T>(self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
     where
-        T: FromStr + 'static,
+        T: FromStr + Send + Sync + 'static,
         T::Err: Display,
     {
         self.field(Text::<T>::new(name, prompt).validator_if(validator))
@@ -68,7 +68,7 @@ impl FormBuilder {
     /// Adds an [optional](Text::optional) [`Text`] field, whose value is an `Option<T>`.
     pub fn add_optional_field<T>(self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
     where
-        T: FromStr + 'static,
+        T: FromStr + Send + Sync + 'static,
         T::Err: Display,
     {
         self.field(Text::<T>::optional(name, prompt).validator_if(validator))
@@ -77,7 +77,7 @@ impl FormBuilder {
     /// Adds a [`Select`] over `options`, each a value and the label shown for it.
     pub fn add_select<T, L>(self, name: &str, prompt: &str, options: impl IntoIterator<Item = (T, L)>) -> Self
     where
-        T: Clone + 'static,
+        T: Clone + Send + Sync + 'static,
         L: Into<String>,
     {
         self.field(Select::new(name, prompt, options))
@@ -92,7 +92,7 @@ impl FormBuilder {
         limit: Option<usize>,
     ) -> Self
     where
-        T: Clone + 'static,
+        T: Clone + Send + Sync + 'static,
         L: Into<String>,
     {
         self.field(MultiSelect::new(name, prompt, options).limit_to(limit))

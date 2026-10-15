@@ -62,8 +62,10 @@ pub trait Console {
     fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error>;
 }
 
-/// The terminal the program runs in: text from standard input, passwords typed unseen, and choices drawn in place
-/// and moved through with the arrow keys, Space and Enter. Hints and defaults are shown in grey.
+/// The terminal the program runs in.
+///
+/// Text comes from standard input, passwords are typed unseen, and choices are drawn in place and moved through with
+/// the arrow keys, Space and Enter. Hints and defaults are shown in grey.
 #[derive(Debug, Default)]
 pub struct Terminal;
 

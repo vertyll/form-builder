@@ -3,29 +3,6 @@
 Forms for the terminal: text fields parsed into any type, optional fields, and choices of one or several options
 moved through with the arrow keys.
 
-## Features
-
-- **Typed fields**: a text field is parsed into any type that implements `FromStr`, and read back as that type.
-- **Defaults**: Enter on an empty answer takes the field's default, shown in grey after the prompt:
-  `Port * [8080]:`. A select starts on its default option, marked `(default)`, and `d` goes back to it after moving
-  away; a multiselect starts with its defaults chosen, and `d` restores them.
-- **Optional fields**: an empty answer gives `None`.
-- **Select and multiselect**: a grey line under the prompt shows the keys, such as
-  `↑↓ move · Enter choose · Esc cancel · d default`: the arrow keys or `j`/`k` move, Space marks an option of a
-  multiselect, Enter confirms, and Esc or Ctrl+C cancels. A list taller than the terminal scrolls, showing how many
-  options are above and below. A multiselect may limit how many options are chosen.
-- **Yes-or-no questions** answered `y` or `n`, and **passwords** typed unseen, asked twice when they must be repeated.
-- **Conditional fields**: a field asked only when an earlier answer calls for it.
-- **Validation**: a `Validator` checks a text field's input before it is parsed, and the field asks again with the
-  message of the first check that fails. The checks in `validate` cover names, emails, dates, URLs and more, any
-  closure can be one, and a rule can compare the input with earlier answers.
-- **Required marks**: the prompt of every required field carries `*`, as `Name *:`; `required_marker("(required)")`
-  uses a marker of your own, and `no_required_marker()` leaves it out.
-- **Any language**: the texts the form shows of its own, such as `This field is required`, are in `Messages`, and
-  can be replaced.
-- **Errors you can match**: every failure is an `Error` variant, such as the input ending before a field was filled.
-- **Linux, macOS and Windows**, through [crossterm](https://github.com/crossterm-rs/crossterm).
-
 ## Installation
 
 ```bash
@@ -65,18 +42,14 @@ fn main() -> Result<(), Error> {
 }
 ```
 
-For the plain cases, `add_field`, `add_optional_field`, `add_select` and `add_multiselect` add a field in one call.
-`cargo run --example demo` runs a longer form. `Form::fill_with` fills a form through any `Console`, such as one that
-replays answers in a test.
-
-## Migrating from 1.x
-
-Version 2.0 changes the API: errors, reading values, optional fields and validators. [Migrating from 1.x to
-2.0](docs/migration.md) shows each change, before and after.
+`cargo run --example demo` runs a longer form.
 
 ## Documentation
 
-The API documentation, with every check of `validate`, is at [docs.rs](https://docs.rs/form_builder).
+- [Contents](CONTENTS.md) – every document of the library, and what it covers.
+- [Features](docs/features.md) – every kind of field, defaults, choices, validation, languages and errors.
+- [Standards](STANDARDS.md) – the specifications the checks and the terminal follow.
+- [API documentation](https://docs.rs/form_builder) – every type and method, on docs.rs.
 
 ## License
 
