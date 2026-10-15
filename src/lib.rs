@@ -36,7 +36,9 @@
 //! }
 //! ```
 //!
-//! [`Form::fill_with`] fills a form through any [`Console`], such as one that replays answers in a test.
+//! The prompt of every required field is marked with `*`, which [`FormBuilder::required_marker`] changes and
+//! [`FormBuilder::no_required_marker`] leaves out. [`Form::fill_with`] fills a form through any [`Console`], such as
+//! one that replays answers in a test.
 
 mod console;
 mod error;

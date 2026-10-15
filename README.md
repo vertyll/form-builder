@@ -7,6 +7,8 @@ moved through with the arrow keys.
 
 - **Typed fields**: a text field is parsed into any type that implements `FromStr`, and read back as that type.
 - **Optional fields**: an empty answer gives `None`.
+- **Required marks**: the prompt of every required field carries `*`, as `Name *:`; `required_marker("(required)")`
+  uses a marker of your own, and `no_required_marker()` leaves it out.
 - **Select and multiselect**: the user moves with the arrow keys or `j`/`k`, chooses with Space and confirms with
   Enter; Esc or Ctrl+C cancels. A multiselect may limit how many options are chosen.
 - **Validation**: a `Validator` checks a text field's input before it is parsed, and the field asks again with the

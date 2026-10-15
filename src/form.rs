@@ -34,6 +34,13 @@ struct Field {
     value: Option<Value>,
 }
 
+impl Field {
+    /// Whether the field needs an answer: every one but an optional text field.
+    fn is_required(&self) -> bool {
+        !matches!(self.kind, Kind::Text { optional: true, .. })
+    }
+}
+
 impl fmt::Debug for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Field")
@@ -55,14 +62,28 @@ impl fmt::Debug for Field {
 ///     .add_select("size", "Size:", [("S", "Small"), ("L", "Large")])
 ///     .build();
 /// ```
-#[derive(Debug, Default)]
+///
+/// The prompt of every required field is marked with `*`, before its closing colon: `Name:` is asked as `Name *:`.
+/// [`required_marker`](Self::required_marker) changes the mark, and
+/// [`no_required_marker`](Self::no_required_marker) leaves it out.
+#[derive(Debug)]
 #[must_use]
 pub struct FormBuilder {
     fields: Vec<Field>,
+    required_marker: Option<String>,
+}
+
+impl Default for FormBuilder {
+    fn default() -> Self {
+        Self {
+            fields: Vec::new(),
+            required_marker: Some("*".to_owned()),
+        }
+    }
 }
 
 impl FormBuilder {
-    /// A builder with no fields.
+    /// A builder with no fields, which marks required fields with `*`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -116,10 +137,27 @@ impl FormBuilder {
         self.choice(name, prompt, labels, Mode::Multiple { limit }, pick)
     }
 
+    /// Marks every required field with `marker` instead of `*`. A field is required unless it was added with
+    /// [`add_optional_field`](Self::add_optional_field); a select or multiselect always needs an answer, so it is
+    /// marked too.
+    pub fn required_marker(mut self, marker: impl Into<String>) -> Self {
+        self.required_marker = Some(marker.into());
+        self
+    }
+
+    /// Leaves required fields unmarked, their prompts as given.
+    pub fn no_required_marker(mut self) -> Self {
+        self.required_marker = None;
+        self
+    }
+
     /// The form, ready to be filled.
     #[must_use]
     pub fn build(self) -> Form {
-        Form { fields: self.fields }
+        Form {
+            fields: self.fields,
+            required_marker: self.required_marker,
+        }
     }
 
     fn text<T>(mut self, name: &str, prompt: &str, validator: Option<Validator>, optional: bool) -> Self
@@ -178,6 +216,7 @@ fn split<T, L: Into<String>>(options: impl IntoIterator<Item = (T, L)>) -> (Vec<
 #[derive(Debug)]
 pub struct Form {
     fields: Vec<Field>,
+    required_marker: Option<String>,
 }
 
 impl Form {
@@ -198,7 +237,11 @@ impl Form {
     /// As [`fill`](Self::fill).
     pub fn fill_with(&mut self, console: &mut impl Console) -> Result<(), Error> {
         for field in &mut self.fields {
-            field.value = Some(ask(field, console)?);
+            let prompt = match &self.required_marker {
+                Some(marker) if field.is_required() => marked(&field.prompt, marker),
+                _ => field.prompt.clone(),
+            };
+            field.value = Some(ask(field, &prompt, console)?);
         }
         Ok(())
     }
@@ -224,7 +267,16 @@ impl Form {
     }
 }
 
-fn ask(field: &Field, console: &mut impl Console) -> Result<Value, Error> {
+/// `prompt` with `marker` before its closing colon, or after it when it has none.
+fn marked(prompt: &str, marker: &str) -> String {
+    let prompt = prompt.trim_end();
+    match prompt.strip_suffix(':') {
+        Some(stem) => format!("{stem} {marker}:"),
+        None => format!("{prompt} {marker}"),
+    }
+}
+
+fn ask(field: &Field, prompt: &str, console: &mut impl Console) -> Result<Value, Error> {
     match &field.kind {
         Kind::Text {
             validator,
@@ -232,7 +284,7 @@ fn ask(field: &Field, console: &mut impl Console) -> Result<Value, Error> {
             parse,
         } => loop {
             let line = console
-                .read_line(&field.prompt)?
+                .read_line(prompt)?
                 .ok_or_else(|| Error::EndOfInput(field.name.clone()))?;
             let input = line.trim();
             let skip_checks = *optional && input.is_empty();
@@ -252,9 +304,22 @@ fn ask(field: &Field, console: &mut impl Console) -> Result<Value, Error> {
                 return Err(Error::NoOptions(field.name.clone()));
             }
             let chosen = console
-                .choose(&field.prompt, options, *mode)?
+                .choose(prompt, options, *mode)?
                 .ok_or_else(|| Error::Cancelled(field.name.clone()))?;
             Ok(pick(&chosen))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::marked;
+
+    #[test]
+    fn the_marker_goes_before_the_closing_colon() {
+        assert_eq!(marked("Name:", "*"), "Name *:");
+        assert_eq!(marked("Name: ", "*"), "Name *:");
+        assert_eq!(marked("Your name", "*"), "Your name *");
+        assert_eq!(marked("Email:", "(required)"), "Email (required):");
     }
 }

@@ -115,6 +115,13 @@ A field's type still needs `FromStr`, but its parse error must implement `Displa
 of the standard library's types and most others do. A value that does not parse is reported as `Invalid input:`
 followed by that error, and the field asks again.
 
+## Required marks
+
+The prompt of every required field now carries `*` before its closing colon, so `Name:` is asked as `Name *:`. A
+field added with `add_optional_field` is not marked; a select or multiselect always needs an answer and is. Call
+`no_required_marker()` on the builder to keep the prompts as 1.x showed them, or `required_marker("(required)")` for a
+mark of your own.
+
 ## Input
 
 A choice is drawn where the form is, below the earlier answers, and leaves one line with the answer, such as

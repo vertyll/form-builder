@@ -65,7 +65,7 @@ fn every_kind_of_field_is_filled_and_read_as_its_type() {
     assert_eq!(form.get::<Vec<&str>>("hobbies").unwrap(), ["a, b", "\"q\""]);
     assert_eq!(
         console.prompts,
-        ["Name:", "Age:", "Height:", "Width:", "Plan:", "Hobbies:"]
+        ["Name *:", "Age *:", "Height:", "Width:", "Plan *:", "Hobbies *:"]
     );
 }
 
@@ -128,4 +128,29 @@ fn reading_a_value_names_what_is_wrong() {
         message.starts_with("field `age` does not hold a `") && message.contains("String"),
         "{message}"
     );
+}
+
+#[test]
+fn required_fields_are_marked_unless_asked_not_to() {
+    let build = |builder: FormBuilder| {
+        builder
+            .add_field::<String>("name", "Name:", None)
+            .add_optional_field::<u32>("age", "Age:", None)
+            .add_select("plan", "Plan", [(1u8, "Free")])
+            .build()
+    };
+    let mut marked = build(FormBuilder::new());
+    let mut console = Scripted::new(&["Ann", ""], vec![Some(vec![0])]);
+    marked.fill_with(&mut console).unwrap();
+    assert_eq!(console.prompts, ["Name *:", "Age:", "Plan *"]);
+
+    let mut plain = build(FormBuilder::new().no_required_marker());
+    let mut console = Scripted::new(&["Ann", ""], vec![Some(vec![0])]);
+    plain.fill_with(&mut console).unwrap();
+    assert_eq!(console.prompts, ["Name:", "Age:", "Plan"]);
+
+    let mut custom = build(FormBuilder::new().required_marker("(required)"));
+    let mut console = Scripted::new(&["Ann", ""], vec![Some(vec![0])]);
+    custom.fill_with(&mut console).unwrap();
+    assert_eq!(console.prompts, ["Name (required):", "Age:", "Plan (required)"]);
 }
