@@ -1,7 +1,7 @@
 use crate::validation::Validator;
-use libc::{tcgetattr, tcsetattr, ECHO, ICANON, TCSANOW};
+use libc::{ECHO, ICANON, TCSANOW, tcgetattr, tcsetattr};
 use std::fmt::Debug;
-use std::io::{self, stdin, Read, Write};
+use std::io::{self, Read, Write, stdin};
 use std::os::unix::io::AsRawFd;
 use std::str::FromStr;
 
@@ -123,11 +123,7 @@ where
 ///
 /// * `Ok(Vec<T>)` if the selections are successfully read.
 /// * `Err(String)` if there is an error reading the selections.
-pub fn read_multiselect<T>(
-    prompt: &str,
-    options: &[(T, String)],
-    limit: Option<usize>,
-) -> Result<Vec<T>, String>
+pub fn read_multiselect<T>(prompt: &str, options: &[(T, String)], limit: Option<usize>) -> Result<Vec<T>, String>
 where
     T: Clone + PartialEq + Debug + FromStr,
     T::Err: Debug,
@@ -166,9 +162,7 @@ where
             Key::Space => {
                 if selected_options[selected] {
                     selected_options[selected] = false;
-                } else if limit.is_none()
-                    || selected_options.iter().filter(|&&x| x).count() < limit.unwrap()
-                {
+                } else if limit.is_none() || selected_options.iter().filter(|&&x| x).count() < limit.unwrap() {
                     selected_options[selected] = true;
                 }
             }

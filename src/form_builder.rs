@@ -84,10 +84,7 @@ impl FormBuilder {
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
-        let options = options
-            .into_iter()
-            .map(|(v, s)| (v, s.to_string()))
-            .collect();
+        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
         self.fields.insert(
             self.counter,
             (
@@ -119,21 +116,12 @@ impl FormBuilder {
     /// # Returns
     ///
     /// * The `FormBuilder` instance with the added multiselect field.
-    pub fn add_multiselect<T>(
-        mut self,
-        name: &str,
-        prompt: &str,
-        options: Vec<(T, &str)>,
-        limit: Option<usize>,
-    ) -> Self
+    pub fn add_multiselect<T>(mut self, name: &str, prompt: &str, options: Vec<(T, &str)>, limit: Option<usize>) -> Self
     where
         T: 'static + Clone + PartialEq + Debug + FromStr,
         T::Err: Debug,
     {
-        let options = options
-            .into_iter()
-            .map(|(v, s)| (v, s.to_string()))
-            .collect();
+        let options = options.into_iter().map(|(v, s)| (v, s.to_string())).collect();
         self.fields.insert(
             self.counter,
             (
@@ -156,9 +144,7 @@ impl FormBuilder {
     ///
     /// * A `Form` instance containing the added fields.
     pub fn build(self) -> Form {
-        Form {
-            fields: self.fields,
-        }
+        Form { fields: self.fields }
     }
 }
 
@@ -204,11 +190,7 @@ mod tests {
     ///
     /// * `Ok(String)` if the input is successfully read and validated.
     /// * `Err(String)` if there is an error reading or validating the input.
-    fn read_input(
-        _prompt: &str,
-        validator: Option<&Validator>,
-        input: &str,
-    ) -> Result<String, String> {
+    fn read_input(_prompt: &str, validator: Option<&Validator>, input: &str) -> Result<String, String> {
         let mut cursor = Cursor::new(input);
         let mut buffer = String::new();
         cursor.read_line(&mut buffer).unwrap();

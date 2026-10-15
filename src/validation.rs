@@ -12,8 +12,7 @@ impl ValidationMethods {
     const PHONE_REGEX: &'static str = r"^\+?[1-9]\d{1,14}$";
     const POSTAL_CODE_REGEX: &'static str = r"^\d{5}(-\d{4})?$";
     const CREDIT_CARD_REGEX: &'static str = r"^\d{4}-?\d{4}-?\d{4}-?\d{4}$";
-    const UUID_REGEX: &'static str =
-        r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+    const UUID_REGEX: &'static str = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
     /// Validates that the name does not contain any numeric characters.
     ///
@@ -253,9 +252,7 @@ impl Validator {
     pub fn validate(&self, input: &str) -> Result<(), String> {
         for (validation, error_message) in &self.validations {
             if !validation(input) {
-                return Err(error_message
-                    .unwrap_or("Invalid input, please try again.")
-                    .to_string());
+                return Err(error_message.unwrap_or("Invalid input, please try again.").to_string());
             }
         }
         Ok(())
@@ -355,11 +352,7 @@ mod tests {
 
     #[test]
     fn test_is_uuid() {
-        assert!(ValidationMethods::is_uuid(
-            "123e4567-e89b-12d3-a456-426614174000"
-        ));
-        assert!(!ValidationMethods::is_uuid(
-            "123e4567-e89b-12d3-a456-42661417400"
-        ));
+        assert!(ValidationMethods::is_uuid("123e4567-e89b-12d3-a456-426614174000"));
+        assert!(!ValidationMethods::is_uuid("123e4567-e89b-12d3-a456-42661417400"));
     }
 }
