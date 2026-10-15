@@ -1,120 +1,260 @@
-use crate::field::{Field, FieldTrait};
-use crate::multiselect_field::MultiselectField;
-use crate::optional::Optional;
-use crate::select_field::SelectField;
-use std::collections::BTreeMap;
-use std::fmt::Debug;
+//! The form: built from fields by [`FormBuilder`], filled through a [`Console`], then read with [`Form::get`].
+
+use std::any::{Any, type_name};
+use std::fmt::{self, Display};
 use std::str::FromStr;
 
-/// A struct representing a form with multiple fields.
+use crate::Error;
+use crate::console::{Console, Terminal};
+use crate::selection::Mode;
+use crate::validate::Validator;
+
+type Value = Box<dyn Any>;
+type Parse = Box<dyn Fn(&str) -> Result<Value, String>>;
+type Pick = Box<dyn Fn(&[usize]) -> Value>;
+
+/// What a field asks for, with what turns the answer into its value.
+enum Kind {
+    Text {
+        validator: Option<Validator>,
+        optional: bool,
+        parse: Parse,
+    },
+    Choice {
+        options: Vec<String>,
+        mode: Mode,
+        pick: Pick,
+    },
+}
+
+struct Field {
+    name: String,
+    prompt: String,
+    kind: Kind,
+    value: Option<Value>,
+}
+
+impl fmt::Debug for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Field")
+            .field("name", &self.name)
+            .field("filled", &self.value.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Collects the fields of a form, in the order they will be asked.
+///
+/// ```
+/// use form_builder::FormBuilder;
+/// use form_builder::validate::{self, Validator};
+///
+/// let form = FormBuilder::new()
+///     .add_field::<String>("name", "Name:", Some(Validator::new().rule(validate::not_empty, "Required")))
+///     .add_optional_field::<u32>("age", "Age (optional):", None)
+///     .add_select("size", "Size:", [("S", "Small"), ("L", "Large")])
+///     .build();
+/// ```
+#[derive(Debug, Default)]
+#[must_use]
+pub struct FormBuilder {
+    fields: Vec<Field>,
+}
+
+impl FormBuilder {
+    /// A builder with no fields.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a field read as text and parsed into a `T`. The trimmed input must pass `validator` first, and a value
+    /// that does not parse is refused; either way the field asks again.
+    pub fn add_field<T>(self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
+    where
+        T: FromStr + 'static,
+        T::Err: Display,
+    {
+        self.text::<T>(name, prompt, validator, false)
+    }
+
+    /// Adds a field like [`add_field`](Self::add_field) that may be left empty: its value is an `Option<T>`, `None`
+    /// for an empty answer, which skips `validator`.
+    pub fn add_optional_field<T>(self, name: &str, prompt: &str, validator: Option<Validator>) -> Self
+    where
+        T: FromStr + 'static,
+        T::Err: Display,
+    {
+        self.text::<T>(name, prompt, validator, true)
+    }
+
+    /// Adds a field whose value is one of `options`, each a value and the label shown for it.
+    pub fn add_select<T, L>(self, name: &str, prompt: &str, options: impl IntoIterator<Item = (T, L)>) -> Self
+    where
+        T: Clone + 'static,
+        L: Into<String>,
+    {
+        let (values, labels) = split(options);
+        let pick: Pick = Box::new(move |chosen| Box::new(values[chosen[0]].clone()));
+        self.choice(name, prompt, labels, Mode::Single, pick)
+    }
+
+    /// Adds a field whose value is a `Vec<T>` of one or more of `options`, at most `limit` of them when given.
+    pub fn add_multiselect<T, L>(
+        self,
+        name: &str,
+        prompt: &str,
+        options: impl IntoIterator<Item = (T, L)>,
+        limit: Option<usize>,
+    ) -> Self
+    where
+        T: Clone + 'static,
+        L: Into<String>,
+    {
+        let (values, labels) = split(options);
+        let pick: Pick =
+            Box::new(move |chosen| Box::new(chosen.iter().map(|&index| values[index].clone()).collect::<Vec<T>>()));
+        self.choice(name, prompt, labels, Mode::Multiple { limit }, pick)
+    }
+
+    /// The form, ready to be filled.
+    #[must_use]
+    pub fn build(self) -> Form {
+        Form { fields: self.fields }
+    }
+
+    fn text<T>(mut self, name: &str, prompt: &str, validator: Option<Validator>, optional: bool) -> Self
+    where
+        T: FromStr + 'static,
+        T::Err: Display,
+    {
+        let parse: Parse = if optional {
+            Box::new(|input| match input {
+                "" => Ok(Box::new(None::<T>)),
+                _ => input
+                    .parse::<T>()
+                    .map(|value| Box::new(Some(value)) as Value)
+                    .map_err(|e| e.to_string()),
+            })
+        } else {
+            Box::new(|input| {
+                input
+                    .parse::<T>()
+                    .map(|value| Box::new(value) as Value)
+                    .map_err(|e| e.to_string())
+            })
+        };
+        self.push(
+            name,
+            prompt,
+            Kind::Text {
+                validator,
+                optional,
+                parse,
+            },
+        );
+        self
+    }
+
+    fn choice(mut self, name: &str, prompt: &str, options: Vec<String>, mode: Mode, pick: Pick) -> Self {
+        self.push(name, prompt, Kind::Choice { options, mode, pick });
+        self
+    }
+
+    fn push(&mut self, name: &str, prompt: &str, kind: Kind) {
+        self.fields.push(Field {
+            name: name.to_owned(),
+            prompt: prompt.to_owned(),
+            kind,
+            value: None,
+        });
+    }
+}
+
+fn split<T, L: Into<String>>(options: impl IntoIterator<Item = (T, L)>) -> (Vec<T>, Vec<String>) {
+    options.into_iter().map(|(value, label)| (value, label.into())).unzip()
+}
+
+/// A form of named fields, filled in order, whose values are then read by name and type.
+#[derive(Debug)]
 pub struct Form {
-    /// A map of field order to field name and field trait object.
-    pub fields: BTreeMap<u32, (String, Box<dyn FieldTrait>)>,
+    fields: Vec<Field>,
 }
 
 impl Form {
-    /// Fills all fields in the form by prompting the user for input.
+    /// Asks every field in the terminal, in order.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// * `Ok(())` if all fields are successfully filled.
-    /// * `Err(String)` if there is an error filling any field.
-    pub fn fill(&mut self) -> Result<(), String> {
-        for (_order, (_name, field)) in &mut self.fields {
-            field.fill()?;
+    /// Returns why a field could not be filled: the input ended, the user cancelled a choice, a choice has no
+    /// options, or the terminal failed.
+    pub fn fill(&mut self) -> Result<(), Error> {
+        self.fill_with(&mut Terminal)
+    }
+
+    /// Asks every field through `console`, in order.
+    ///
+    /// # Errors
+    ///
+    /// As [`fill`](Self::fill).
+    pub fn fill_with(&mut self, console: &mut impl Console) -> Result<(), Error> {
+        for field in &mut self.fields {
+            field.value = Some(ask(field, console)?);
         }
         Ok(())
     }
 
-    /// Gets the value of a field by its name.
+    /// The value of the field `name`: `T` for a field or a select, `Option<T>` for an optional field, `Vec<T>` for a
+    /// multiselect.
     ///
-    /// # Parameters
+    /// # Errors
     ///
-    /// * `name` - The name of the field.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(T)` if the field value is successfully retrieved.
-    /// * `Err(String)` if the field is not found or has an incorrect type.
-    pub fn get_value<T>(&self, name: &str) -> Result<T, String>
-    where
-        T: 'static + FromStr + Debug + Clone + Default + PartialEq,
-        T::Err: Debug,
-    {
+    /// Returns [`Error::NotFound`] when there is no such field, [`Error::NotFilled`] before it is filled, and
+    /// [`Error::WrongType`] when it holds another type.
+    pub fn get<T: Clone + 'static>(&self, name: &str) -> Result<T, Error> {
         let field = self
             .fields
-            .values()
-            .find(|(field_name, _)| field_name == name)
-            .ok_or_else(|| format!("Field '{}' not found", name))?
-            .1
-            .as_ref();
-
-        if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
-            field.get_value()
-        } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
-            field.get_value().map(|opt| match opt {
-                Optional::Some(value) => value,
-                Optional::None => T::default(),
-            })
-        } else if let Some(field) = field.as_any().downcast_ref::<SelectField<T>>() {
-            field
-                .get_value()
-                .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))
-        } else if let Some(field) = field.as_any().downcast_ref::<MultiselectField<T>>() {
-            field
-                .get_value()
-                .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))
-        } else {
-            Err(format!("Field '{}' has incorrect type", name))
-        }
+            .iter()
+            .find(|field| field.name == name)
+            .ok_or_else(|| Error::NotFound(name.to_owned()))?;
+        let value = field.value.as_ref().ok_or_else(|| Error::NotFilled(name.to_owned()))?;
+        value.downcast_ref::<T>().cloned().ok_or_else(|| Error::WrongType {
+            name: name.to_owned(),
+            expected: type_name::<T>(),
+        })
     }
+}
 
-    /// Gets the value of a field as a vector by its name.
-    ///
-    /// # Parameters
-    ///
-    /// * `name` - The name of the field.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Vec<T>)` if the field value is successfully retrieved.
-    /// * `Err(String)` if the field is not found or has an incorrect type.
-    pub fn get_value_vec<T>(&self, name: &str) -> Result<Vec<T>, String>
-    where
-        T: 'static + FromStr + Debug + Clone + Default + PartialEq,
-        T::Err: Debug,
-    {
-        let field = self
-            .fields
-            .values()
-            .find(|(field_name, _)| field_name == name)
-            .ok_or_else(|| format!("Field '{}' not found", name))?
-            .1
-            .as_ref();
-
-        if let Some(field) = field.as_any().downcast_ref::<Field<T>>() {
-            Ok(vec![field.get_value()?])
-        } else if let Some(field) = field.as_any().downcast_ref::<Field<Optional<T>>>() {
-            let value = field.get_value()?;
-            match value {
-                Optional::Some(v) => Ok(vec![v]),
-                Optional::None => Ok(vec![T::default()]),
+fn ask(field: &Field, console: &mut impl Console) -> Result<Value, Error> {
+    match &field.kind {
+        Kind::Text {
+            validator,
+            optional,
+            parse,
+        } => loop {
+            let line = console
+                .read_line(&field.prompt)?
+                .ok_or_else(|| Error::EndOfInput(field.name.clone()))?;
+            let input = line.trim();
+            let skip_checks = *optional && input.is_empty();
+            if let Some(validator) = validator.as_ref().filter(|_| !skip_checks)
+                && let Err(message) = validator.check(input)
+            {
+                console.report(message)?;
+                continue;
             }
-        } else if let Some(field) = field.as_any().downcast_ref::<SelectField<T>>() {
-            let value = field
-                .get_value()
-                .and_then(|v| v.parse::<T>().map_err(|e| format!("{:?}", e)))?;
-            Ok(vec![value])
-        } else if let Some(field) = field.as_any().downcast_ref::<MultiselectField<T>>() {
-            let value = field.get_value()?;
-            let value = value.trim_matches(|c| c == '[' || c == ']').to_string();
-            let values: Result<Vec<T>, _> = value
-                .split(',')
-                .map(|s| s.trim_matches(|c| c == '"' || c == ' ').parse::<T>())
-                .collect();
-            values.map_err(|e| format!("{:?}", e))
-        } else {
-            Err(format!("Field '{}' has incorrect type", name))
+            match parse(input) {
+                Ok(value) => return Ok(value),
+                Err(reason) => console.report(&format!("Invalid input: {reason}"))?,
+            }
+        },
+        Kind::Choice { options, mode, pick } => {
+            if options.is_empty() {
+                return Err(Error::NoOptions(field.name.clone()));
+            }
+            let chosen = console
+                .choose(&field.prompt, options, *mode)?
+                .ok_or_else(|| Error::Cancelled(field.name.clone()))?;
+            Ok(pick(&chosen))
         }
     }
 }

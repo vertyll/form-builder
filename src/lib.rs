@@ -1,163 +1,51 @@
-//! A library for building forms with various fields and validation.
+//! Forms for the terminal: text fields parsed into any type that implements [`FromStr`](std::str::FromStr),
+//! optional fields, and choices of one or several options moved through with the arrow keys.
 //!
-//! This library provides a flexible way to create forms with different types of fields, including text fields, select fields, and multiselect fields. It also supports validation for these fields.
+//! A [`FormBuilder`] collects the fields, [`Form::fill`] asks them in order, and [`Form::get`] reads each value by
+//! name, as the type the field holds. A [`Validator`] checks a text field's input before it is parsed; the checks in
+//! [`validate`] cover the common cases, and any closure can be one.
 //!
-//! # Example
+//! ```no_run
+//! use form_builder::validate::{self, Validator};
+//! use form_builder::{Error, FormBuilder};
 //!
-//! ```rust,no_run
-//! use form_builder::{FormBuilder, Optional, ValidationMethods, Validator};
-//!
-//! fn validate_custom(value: &str) -> bool {
-//!     value.len() > 5
-//! }
-//!
-//! fn main() -> Result<(), String> {
+//! fn main() -> Result<(), Error> {
 //!     let mut form = FormBuilder::new()
 //!         .add_field::<String>(
 //!             "name",
-//!             "Enter name:",
-//!             Some(Validator::new(vec![
-//!                 (ValidationMethods::not_empty, Some("Name cannot be empty")),
-//!                 (
-//!                     ValidationMethods::validate_name,
-//!                     Some("Name cannot contain numbers"),
-//!                 ),
-//!             ])),
+//!             "Name:",
+//!             Some(Validator::new()
+//!                 .rule(validate::not_empty, "Name cannot be empty")
+//!                 .rule(validate::name, "Name cannot contain digits")),
 //!         )
-//!         .add_field::<String>(
-//!             "email",
-//!             "Enter email:",
-//!             Some(Validator::new(vec![
-//!                 (ValidationMethods::not_empty, Some("Email cannot be empty")),
-//!                 (
-//!                     ValidationMethods::validate_email,
-//!                     Some("Invalid email format"),
-//!                 ),
-//!             ])),
-//!         )
-//!         .add_field::<u32>(
-//!             "age",
-//!             "Enter age:",
-//!             Some(Validator::new(vec![(
-//!                 ValidationMethods::not_empty,
-//!                 Some("Age cannot be empty"),
-//!             )])),
-//!         )
-//!         .add_field::<String>(
-//!             "custom",
-//!             "Enter custom value:",
-//!             Some(Validator::new(vec![
-//!                 (
-//!                     ValidationMethods::not_empty,
-//!                     Some("Custom value cannot be empty"),
-//!                 ),
-//!                 (
-//!                     validate_custom,
-//!                     Some("Custom value must be longer than 5 characters"),
-//!                 ),
-//!             ])),
-//!         )
-//!         .add_field::<f64>(
-//!             "height",
-//!             "Enter height:",
-//!             Some(Validator::new(vec![(
-//!                 ValidationMethods::not_empty,
-//!                 Some("Height cannot be empty"),
-//!             )])),
-//!         )
-//!         .add_field::<bool>(
-//!             "is_student",
-//!             "Are you a student (true/false):",
-//!             Some(Validator::new(vec![(
-//!                 ValidationMethods::not_empty,
-//!                 Some("This field cannot be empty"),
-//!             )])),
-//!         )
-//!         .add_field::<char>(
-//!             "initial",
-//!             "Enter your initial:",
-//!             Some(Validator::new(vec![(
-//!                 ValidationMethods::not_empty,
-//!                 Some("Initial cannot be empty"),
-//!             )])),
-//!         )
-//!         .add_field::<Optional<u32>>("width", "Enter width (optional):", None)
-//!         .add_select(
-//!             "gender",
-//!             "Select your gender:",
-//!             vec![
-//!                 (1u32, "Male"),
-//!                 (2u32, "Female"),
-//!                 (3u32, "Other"),
-//!             ],
-//!         )
-//!         .add_multiselect(
-//!             "hobbies",
-//!             "Select your hobbies:",
-//!             vec![
-//!                 ("reading".to_string(), "Reading"),
-//!                 ("sports".to_string(), "Sports"),
-//!                 ("music".to_string(), "Music"),
-//!             ],
-//!             Some(2),
-//!         )
+//!         .add_field::<u32>("age", "Age:", None)
+//!         .add_optional_field::<f64>("height", "Height in metres (optional):", None)
+//!         .add_select("plan", "Plan:", [(1u8, "Free"), (2, "Pro")])
+//!         .add_multiselect("hobbies", "Hobbies:", [("reading", "Reading"), ("music", "Music")], Some(2))
 //!         .build();
 //!
 //!     form.fill()?;
 //!
-//!     let name: String = form.get_value("name")?;
-//!     let email: String = form.get_value("email")?;
-//!     let age: u32 = form.get_value("age")?;
-//!     let custom: String = form.get_value("custom")?;
-//!     let height: f64 = form.get_value("height")?;
-//!     let is_student: bool = form.get_value("is_student")?;
-//!     let initial: char = form.get_value("initial")?;
-//!     let width: Optional<u32> = form.get_value("width")?;
-//!     let gender: u32 = form.get_value("gender")?;
-//!     let hobbies: Vec<String> = form.get_value_vec("hobbies")?;
-//!
-//!     let width = process_width(width);
-//!
-//!     println!(
-//!         "Name: {:?}, Email: {:?}, Age: {:?}, Custom: {:?}, Height: {:?}, Is Student: {:?}, Initial: {:?}, Width: {:?}, Gender: {:?}, Hobbies: {:?}",
-//!         name, email, age, custom, height, is_student, initial, width, gender, hobbies
-//!     );
-//!
+//!     let name: String = form.get("name")?;
+//!     let age: u32 = form.get("age")?;
+//!     let height: Option<f64> = form.get("height")?;
+//!     let plan: u8 = form.get("plan")?;
+//!     let hobbies: Vec<&str> = form.get("hobbies")?;
+//!     println!("{name}, {age}, {height:?}, plan {plan}, {hobbies:?}");
 //!     Ok(())
 //! }
-//!
-//! fn process_width(width: Optional<u32>) -> u32 {
-//!     match width {
-//!         Optional::Some(value) => value + 20,
-//!         Optional::None => 0,
-//!     }
-//! }
 //! ```
+//!
+//! [`Form::fill_with`] fills a form through any [`Console`], such as one that replays answers in a test.
 
-/// Module containing definitions for form fields.
-pub mod field;
+mod console;
+mod error;
+mod form;
+mod selection;
+pub mod validate;
 
-/// Module containing definitions for the form.
-pub mod form;
-
-/// Module containing the form builder.
-pub mod form_builder;
-
-/// Module containing functions for reading input.
-pub mod input;
-
-/// Module containing definitions for multiselect fields.
-pub mod multiselect_field;
-
-/// Module containing definitions for optional values.
-pub mod optional;
-
-/// Module containing definitions for select fields.
-pub mod select_field;
-
-/// Module containing validation methods.
-pub mod validation;
-
-pub use form_builder::FormBuilder;
-pub use optional::Optional;
-pub use validation::{ValidationMethods, Validator};
+pub use console::{Console, Terminal};
+pub use error::Error;
+pub use form::{Form, FormBuilder};
+pub use selection::Mode;
+pub use validate::Validator;

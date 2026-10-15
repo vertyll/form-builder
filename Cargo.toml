@@ -1,6 +1,6 @@
 [package]
 name = "form_builder"
-version = "1.2.2"
+version = "2.0.0"
 edition = "2024"
 authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
 description = "A library for building forms with various fields and validation."
@@ -9,8 +9,19 @@ repository = "https://github.com/vertyll/form-builder"
 documentation = "https://docs.rs/form_builder"
 readme = "README.md"
 keywords = ["form", "builder", "validation", "fields", "input"]
-categories = ["data-structures", "parsing", "command-line-utilities"]
+categories = ["command-line-interface"]
+exclude = [".github/", ".markright.toml"]
 
 [dependencies]
-regex = "1.12.3"
-libc = "0.2"
+crossterm = "0.29.0"
+regex = "1.13.1"
+thiserror = "2.0.21"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
