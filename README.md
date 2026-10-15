@@ -6,12 +6,14 @@ moved through with the arrow keys.
 ## Features
 
 - **Typed fields**: a text field is parsed into any type that implements `FromStr`, and read back as that type.
-- **Defaults**: an empty answer takes the field's default, shown in grey after the prompt: `Port * [8080]:`. A
-  select starts on its default option, marked `(default)`.
+- **Defaults**: Enter on an empty answer takes the field's default, shown in grey after the prompt:
+  `Port * [8080]:`. A select starts on its default option, marked `(default)`, and `d` goes back to it after moving
+  away; a multiselect starts with its defaults chosen, and `d` restores them.
 - **Optional fields**: an empty answer gives `None`.
-- **Select and multiselect**: the user moves with the arrow keys or `j`/`k`, chooses with Space and confirms with
-  Enter; Esc or Ctrl+C cancels. A list taller than the terminal scrolls, showing how many options are above and
-  below. A multiselect may limit how many options are chosen.
+- **Select and multiselect**: a grey line under the prompt shows the keys, such as
+  `↑↓ move · Enter choose · Esc cancel · d default`: the arrow keys or `j`/`k` move, Space marks an option of a
+  multiselect, Enter confirms, and Esc or Ctrl+C cancels. A list taller than the terminal scrolls, showing how many
+  options are above and below. A multiselect may limit how many options are chosen.
 - **Yes-or-no questions** answered `y` or `n`, and **passwords** typed unseen, asked twice when they must be repeated.
 - **Conditional fields**: a field asked only when an earlier answer calls for it.
 - **Validation**: a `Validator` checks a text field's input before it is parsed, and the field asks again with the

@@ -20,6 +20,7 @@ pub(crate) enum Action {
     Up,
     Down,
     Toggle,
+    Default,
     Confirm,
 }
 
@@ -29,21 +30,33 @@ pub(crate) struct Selection {
     mode: Mode,
     cursor: usize,
     chosen: Vec<bool>,
+    defaults: Vec<usize>,
     top: usize,
 }
 
 impl Selection {
-    /// A selection over `len` options, the cursor on `cursor` and the options of `chosen` chosen.
-    pub(crate) fn new(len: usize, mode: Mode, cursor: usize, chosen: &[usize]) -> Self {
-        let mut marks = vec![false; len];
-        for &index in chosen.iter().filter(|&&index| index < len) {
-            marks[index] = true;
-        }
-        Self {
+    /// A selection over `len` options that starts on its `defaults`: the cursor on the first, and in a multiselect
+    /// all of them chosen.
+    pub(crate) fn new(len: usize, mode: Mode, defaults: &[usize]) -> Self {
+        let mut selection = Self {
             mode,
-            cursor: cursor.min(len.saturating_sub(1)),
-            chosen: marks,
+            cursor: 0,
+            chosen: vec![false; len],
+            defaults: defaults.iter().copied().filter(|&index| index < len).collect(),
             top: 0,
+        };
+        selection.reset();
+        selection
+    }
+
+    /// Goes back to the defaults: the cursor on the first, and in a multiselect only they chosen.
+    fn reset(&mut self) {
+        self.cursor = self.defaults.first().copied().unwrap_or(0);
+        if let Mode::Multiple { .. } = self.mode {
+            self.chosen.fill(false);
+            for &index in &self.defaults {
+                self.chosen[index] = true;
+            }
         }
     }
 
@@ -66,6 +79,7 @@ impl Selection {
             Action::Up => self.cursor = self.cursor.saturating_sub(1),
             Action::Down => self.cursor = (self.cursor + 1).min(self.chosen.len().saturating_sub(1)),
             Action::Toggle => self.toggle(),
+            Action::Default => self.reset(),
             Action::Confirm => return self.settled(),
         }
         None
@@ -115,7 +129,7 @@ mod tests {
 
     #[test]
     fn the_cursor_stays_within_the_options() {
-        let mut selection = Selection::new(3, Mode::Single, 0, &[]);
+        let mut selection = Selection::new(3, Mode::Single, &[]);
         selection.apply(Action::Up);
         assert_eq!(selection.cursor(), 0);
         for _ in 0..5 {
@@ -125,16 +139,29 @@ mod tests {
     }
 
     #[test]
-    fn a_choice_starts_where_its_default_is() {
-        let selection = Selection::new(3, Mode::Multiple { limit: None }, 2, &[0, 2, 9]);
-        assert_eq!(selection.cursor(), 2);
-        assert!(selection.is_chosen(0) && !selection.is_chosen(1) && selection.is_chosen(2));
-        assert_eq!(Selection::new(3, Mode::Single, 7, &[]).cursor(), 2);
+    fn a_choice_starts_on_its_defaults_and_goes_back_to_them() {
+        let mut multiple = Selection::new(3, Mode::Multiple { limit: None }, &[2, 0, 9]);
+        assert_eq!(multiple.cursor(), 2);
+        assert!(multiple.is_chosen(0) && !multiple.is_chosen(1) && multiple.is_chosen(2));
+        multiple.apply(Action::Up);
+        multiple.apply(Action::Toggle);
+        multiple.apply(Action::Default);
+        assert_eq!(multiple.cursor(), 2);
+        assert!(multiple.is_chosen(0) && !multiple.is_chosen(1) && multiple.is_chosen(2));
+        let mut single = Selection::new(3, Mode::Single, &[1]);
+        single.apply(Action::Down);
+        single.apply(Action::Default);
+        assert_eq!(single.apply(Action::Confirm), Some(vec![1]));
+        assert_eq!(
+            Selection::new(3, Mode::Single, &[7]).cursor(),
+            0,
+            "a default out of range is left out"
+        );
     }
 
     #[test]
     fn a_single_choice_settles_on_the_cursor() {
-        let mut selection = Selection::new(3, Mode::Single, 0, &[]);
+        let mut selection = Selection::new(3, Mode::Single, &[]);
         selection.apply(Action::Down);
         selection.apply(Action::Toggle);
         assert_eq!(selection.apply(Action::Confirm), Some(vec![1]));
@@ -142,7 +169,7 @@ mod tests {
 
     #[test]
     fn a_multiple_choice_needs_one_option_and_respects_its_limit() {
-        let mut selection = Selection::new(3, Mode::Multiple { limit: Some(2) }, 0, &[]);
+        let mut selection = Selection::new(3, Mode::Multiple { limit: Some(2) }, &[]);
         assert_eq!(selection.apply(Action::Confirm), None);
         for _ in 0..3 {
             selection.apply(Action::Toggle);
@@ -159,7 +186,7 @@ mod tests {
 
     #[test]
     fn a_long_list_shows_a_window_that_follows_the_cursor() {
-        let mut selection = Selection::new(10, Mode::Single, 0, &[]);
+        let mut selection = Selection::new(10, Mode::Single, &[]);
         assert_eq!(selection.window(4), 0..4);
         for _ in 0..3 {
             selection.apply(Action::Down);
@@ -178,7 +205,7 @@ mod tests {
 
     #[test]
     fn a_choice_that_starts_low_shows_its_cursor() {
-        let mut selection = Selection::new(10, Mode::Single, 8, &[]);
+        let mut selection = Selection::new(10, Mode::Single, &[8]);
         assert_eq!(selection.window(3), 6..9);
     }
 }

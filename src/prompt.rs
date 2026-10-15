@@ -89,8 +89,14 @@ impl fmt::Display for Prompt {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Messages {
-    /// Shown above a multiselect.
-    pub choose_many: String,
+    /// The keys of a select, shown under its prompt.
+    pub controls_single: String,
+    /// The keys of a multiselect, shown under its prompt.
+    pub controls_multiple: String,
+    /// The key that goes back to the defaults, added to the keys of a choice that has them.
+    pub controls_default: String,
+    /// What separates the keys in the line of controls.
+    pub controls_separator: String,
     /// Shown when a required field gets an empty answer.
     pub required: String,
     /// Shown before why an input could not be read as the field's type.
@@ -116,7 +122,10 @@ pub struct Messages {
 impl Default for Messages {
     fn default() -> Self {
         Self {
-            choose_many: "Space chooses, Enter confirms".to_owned(),
+            controls_single: "↑↓ move · Enter choose · Esc cancel".to_owned(),
+            controls_multiple: "↑↓ move · Space mark · Enter confirm · Esc cancel".to_owned(),
+            controls_default: "d default".to_owned(),
+            controls_separator: " · ".to_owned(),
             required: "This field is required".to_owned(),
             invalid_input: "Invalid input".to_owned(),
             answer_yes_or_no: "Please answer yes or no".to_owned(),

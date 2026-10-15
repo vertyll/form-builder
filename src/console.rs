@@ -120,16 +120,7 @@ impl Console for Terminal {
     }
 
     fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
-        let mut selection = Selection::new(
-            choice.options.len(),
-            choice.mode,
-            choice.defaults.first().copied().unwrap_or(0),
-            if matches!(choice.mode, Mode::Multiple { .. }) {
-                choice.defaults
-            } else {
-                &[]
-            },
-        );
+        let mut selection = Selection::new(choice.options.len(), choice.mode, choice.defaults);
         let mut stdout = io::stdout();
         let _raw = RawMode::enable()?;
         let mut drawn = 0;
@@ -193,6 +184,7 @@ fn action(code: KeyCode) -> Option<Action> {
         KeyCode::Up | KeyCode::Char('k') => Some(Action::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Action::Down),
         KeyCode::Char(' ') => Some(Action::Toggle),
+        KeyCode::Char('d') => Some(Action::Default),
         KeyCode::Enter => Some(Action::Confirm),
         _ => None,
     }
@@ -250,8 +242,9 @@ fn draw(
         queue!(out, Print(&line.text))?;
         let mut width = line.text.chars().count();
         if let Some(note) = &line.note {
-            queue!(out, Print(' '), PrintStyledContent(note.clone().dark_grey()))?;
-            width += 1 + note.chars().count();
+            let gap = if line.text.is_empty() { "" } else { " " };
+            queue!(out, Print(gap), PrintStyledContent(note.clone().dark_grey()))?;
+            width += gap.len() + note.chars().count();
         }
         queue!(out, Print("\r\n"))?;
         rows = rows.saturating_add(rows_of(width, screen.columns));
@@ -263,10 +256,7 @@ fn draw(
 /// The lines of `choice` on a screen `rows` high: the prompt, the controls of a multiselect, and the options. A list
 /// taller than the screen shows the part around the cursor, with how many options are above and below it.
 fn lines(choice: &Choice<'_>, selection: &mut Selection, rows: u16) -> Vec<Line> {
-    let mut lines = vec![Line::plain(choice.prompt.to_string())];
-    if matches!(selection.mode(), Mode::Multiple { .. }) {
-        lines.push(Line::plain(choice.messages.choose_many.clone()));
-    }
+    let mut lines = vec![Line::plain(choice.prompt.to_string()), controls(choice)];
     let len = choice.options.len();
     let room = usize::from(rows).saturating_sub(lines.len() + 1).max(1);
     let window = selection.window(if len > room { room.saturating_sub(2).max(1) } else { len });
@@ -279,6 +269,24 @@ fn lines(choice: &Choice<'_>, selection: &mut Selection, rows: u16) -> Vec<Line>
         lines.push(more(len - window.end, &choice.messages.more_below, "↓"));
     }
     lines
+}
+
+/// The line of keys under the prompt, in grey: how to move, choose and cancel, and how to go back to the defaults
+/// when the choice has them.
+fn controls(choice: &Choice<'_>) -> Line {
+    let messages = choice.messages;
+    let mut keys = match choice.mode {
+        Mode::Single => messages.controls_single.clone(),
+        Mode::Multiple { .. } => messages.controls_multiple.clone(),
+    };
+    if !choice.defaults.is_empty() {
+        keys.push_str(&messages.controls_separator);
+        keys.push_str(&messages.controls_default);
+    }
+    Line {
+        text: String::new(),
+        note: Some(keys),
+    }
 }
 
 /// The line of option `index`: the cursor, the mark of a multiselect, the label, and a note when it is a default.
@@ -306,7 +314,7 @@ fn more(count: usize, words: &str, arrow: &str) -> Line {
     } else {
         Line {
             text: String::new(),
-            note: Some(format!("  {arrow} {count} {words}")),
+            note: Some(format!("{arrow} {count} {words}")),
         }
     }
 }
@@ -341,6 +349,7 @@ mod tests {
         assert_eq!(action(KeyCode::Char('j')), Some(Action::Down));
         assert_eq!(action(KeyCode::Char(' ')), Some(Action::Toggle));
         assert_eq!(action(KeyCode::Enter), Some(Action::Confirm));
+        assert_eq!(action(KeyCode::Char('d')), Some(Action::Default));
         assert_eq!(action(KeyCode::Char('A')), None);
     }
 
@@ -374,10 +383,14 @@ mod tests {
             defaults: &[0],
             messages: &messages,
         };
-        let mut selection = Selection::new(2, choice.mode, 0, &[0]);
+        let mut selection = Selection::new(2, choice.mode, &[0]);
         let (text, rows) = drawing(&choice, &mut selection, Screen { columns: 80, rows: 24 });
         assert!(text.contains("> [*] Reading \u{1b}[38;5;8m(default)"), "{text:?}");
         assert!(text.contains("  [ ] Music\r\n"), "{text:?}");
+        assert!(
+            text.contains("Space mark · Enter confirm · Esc cancel · d default"),
+            "{text:?}"
+        );
         assert_eq!(rows, 4, "the prompt, the controls and two options");
     }
 
@@ -393,17 +406,21 @@ mod tests {
             defaults: &[10],
             messages: &messages,
         };
-        let mut selection = Selection::new(20, Mode::Single, 10, &[]);
+        let mut selection = Selection::new(20, Mode::Single, &[10]);
         let (text, rows) = drawing(&choice, &mut selection, Screen { columns: 80, rows: 8 });
         assert_eq!(
             rows, 7,
-            "the prompt, two counts and four options, below the screen's eight rows"
+            "the prompt, the controls, two counts and three options, below eight rows"
         );
         assert!(
-            text.contains("↑ 7 more above") && text.contains("↓ 9 more below"),
+            text.contains("↑ 8 more above") && text.contains("↓ 9 more below"),
             "{text:?}"
         );
-        assert!(text.contains("> Option 10") && !text.contains("Option 0\r"), "{text:?}");
+        assert!(
+            text.contains("↑↓ move · Enter choose · Esc cancel · d default"),
+            "{text:?}"
+        );
+        assert!(text.contains("> Option 10") && !text.contains("Option 7\r"), "{text:?}");
     }
 
     #[test]
