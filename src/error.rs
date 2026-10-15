@@ -18,6 +18,14 @@ pub enum Error {
     /// A select or multiselect field was given no options.
     #[error("field `{0}` has no options to choose from")]
     NoOptions(String),
+    /// A preset answer, given where nobody can be asked again, was refused.
+    #[error("field `{name}`: {message}")]
+    Refused {
+        /// The name of the field.
+        name: String,
+        /// Why the answer was refused.
+        message: String,
+    },
     /// The form has no field of that name.
     #[error("no field named `{0}`")]
     NotFound(String),

@@ -4,22 +4,29 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
-use super::{Common, ContextRule, Fallback, Field, Kind, Parse};
+use super::{Common, ContextRule, Fallback, Field, Kind, Parse, Refusal};
 use crate::form::Answers;
 use crate::validate::Validator;
+
+/// A check of a parsed value, and the message shown when it fails.
+type ValueCheck<T> = (Box<dyn Fn(&T) -> bool + Send + Sync>, String);
 
 /// A field read as text and parsed into a `T`, or into an `Option<T>` when [optional](Self::optional).
 ///
 /// ```
 /// use form_builder::Text;
 ///
-/// let port = Text::<u16>::new("port", "Port:").default(8080).hint("1-65535");
+/// let port = Text::<u16>::new("port", "Port:")
+///     .default(8080)
+///     .hint("1024-65535")
+///     .check(|port| *port >= 1024, "Use a port above 1023");
 /// ```
 #[must_use]
 pub struct Text<T> {
     common: Common,
     validator: Option<Validator>,
     rules: Vec<ContextRule>,
+    checks: Vec<ValueCheck<T>>,
     fallback: Option<Fallback>,
     optional: bool,
     value: PhantomData<fn() -> T>,
@@ -36,6 +43,7 @@ where
             common: Common::new(name, prompt),
             validator: None,
             rules: Vec::new(),
+            checks: Vec::new(),
             fallback: None,
             optional: false,
             value: PhantomData,
@@ -49,6 +57,13 @@ where
             optional: true,
             ..Self::new(name, prompt)
         }
+    }
+
+    /// Checks the value once it is parsed, such as a number's range: `message` is shown when `check` fails, and
+    /// the field asks again. A [default](Self::default) is taken as it is.
+    pub fn check(mut self, check: impl Fn(&T) -> bool + Send + Sync + 'static, message: impl Into<String>) -> Self {
+        self.checks.push((Box::new(check), message.into()));
+        self
     }
 
     common_methods!();
@@ -85,11 +100,22 @@ where
 {
     fn from(text: Text<T>) -> Self {
         let optional = text.optional;
-        let parse: Parse = Box::new(move |input| match input.parse::<T>() {
-            Ok(value) if optional => Ok(Box::new(Some(value))),
-            Ok(value) => Ok(Box::new(value)),
-            Err(_) if optional && input.is_empty() => Ok(Box::new(None::<T>)),
-            Err(error) => Err(error.to_string()),
+        let checks = text.checks;
+        let parse: Parse = Box::new(move |input| {
+            if optional && input.is_empty() {
+                return Ok(Box::new(None::<T>));
+            }
+            let value = input
+                .parse::<T>()
+                .map_err(|error| Refusal::Unparsed(error.to_string()))?;
+            if let Some((_, message)) = checks.iter().find(|(check, _)| !check(&value)) {
+                return Err(Refusal::Checked(message.clone()));
+            }
+            Ok(if optional {
+                Box::new(Some(value))
+            } else {
+                Box::new(value)
+            })
         });
         let kind = Kind::Text {
             validator: text.validator,

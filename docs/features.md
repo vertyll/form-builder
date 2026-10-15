@@ -22,6 +22,11 @@ Each kind of field has its own builder, added to a form with `FormBuilder::field
 A required text field refuses an empty answer, and a value that does not parse is reported with the reason its
 `FromStr` gives; either way the field asks again. A field is required unless it is an optional text field.
 
+## Steps
+
+Every prompt starts with its step, in grey: `[3/8] Port *:`. It counts the fields of the form, so a skipped
+conditional field leaves a gap. `no_steps()` leaves the steps out.
+
 ## Defaults and hints
 
 A default is what Enter on an empty answer gives. It is shown in grey after the prompt, and a hint in grey before it:
@@ -83,6 +88,12 @@ Validator::new()
 `rule_with` gives a rule the answers before the field, to compare with them, as a maximum that may not be below an
 earlier minimum.
 
+`check` tests the value once it is parsed, as the type the field holds, and shows its message alone when it fails:
+
+```rust
+Text::<u16>::new("port", "Port:").check(|port| *port >= 1024, "Use a port above 1023")
+```
+
 | Check                            | Accepts                                         |
 |----------------------------------|-------------------------------------------------|
 | `not_empty`                      | any input but an empty one                      |
@@ -99,6 +110,73 @@ earlier minimum.
 | `uuid`                           | a hyphenated UUID                               |
 
 The formats behind them are listed in [Standards](../STANDARDS.md).
+
+## Review
+
+With `review()`, the form lists the answers once every field is asked, a password as `********` and an empty
+optional field as `-`, with `Submit` under the cursor. Choosing an answer asks its field again; a changed answer asks
+the fields its change calls for and skips those it rules out, and keeps the others. Esc cancels the form.
+
+## Answers given ahead
+
+A `Preset` is a console that answers each field by its name, so the same form runs where nobody can answer it, as in
+CI or a script:
+
+```rust
+let mut console = Preset::from_env("APP_")
+    .merge(Preset::from_args(std::env::args().skip(1)))
+    .or(Terminal);
+form.fill_with(&mut console)?;
+```
+
+| Source                            | Answers                                                |
+|-----------------------------------|--------------------------------------------------------|
+| `Preset::new([("port", "8080")])` | the pairs given                                        |
+| `Preset::from_env("APP_")`        | `APP_PORT=8080` for the field `port`                   |
+| `Preset::from_args(args)`         | `port=8080` or `--port=8080`                           |
+| `.answer("port", "8080")`         | one more answer; `.merge(other)` adds another preset's |
+
+A select takes the label of an option, case aside, a multiselect labels separated by commas, and a yes-or-no
+question the form's words for yes and no. A field without an answer takes its default, or `None` when it is
+optional, and otherwise goes to the console given with `or`; with none, the form ends with `Error::EndOfInput`. An
+answer the form refuses ends it with `Error::Refused` and the reason, or is asked again through `or`. A preset
+without `or` skips the review and the second entry of a password.
+
+## Derive
+
+With the `derive` feature, `#[derive(Form)]` asks for a struct field by field:
+
+```rust
+use form_builder::{Form, FromForm};
+
+#[derive(Form)]
+struct SignUp {
+    first_name: String,
+    #[form(prompt = "Port:", default = 8080, hint = "1024-65535")]
+    port: u16,
+    #[form(password, repeat = "Repeat the password:")]
+    password: String,
+    newsletter: bool,
+    company: Option<String>,
+}
+
+let sign_up = SignUp::fill()?;
+```
+
+The type of a field decides what is asked: `bool` a yes-or-no question, `Option<T>` an optional text field, and any
+other type a required text field. The prompt is the field's name as words, `First name:`, unless `prompt` gives it.
+
+| Attribute        | Does                                                               |
+|------------------|--------------------------------------------------------------------|
+| `prompt = "..."` | the prompt                                                         |
+| `hint = "..."`   | a hint shown with the prompt                                       |
+| `default = expr` | the answer an empty input gives                                    |
+| `password`       | asks a `String` without showing it                                 |
+| `repeat = "..."` | with `password`, asks it a second time                             |
+| `skip`           | leaves the field out of the form, filled with `Default::default()` |
+
+`SignUp::form()` gives the builder before it is built, to add `review()` or messages, and `SignUp::from_form(&form)`
+reads the struct from a filled form. Selects and multiselects are built with their own builders.
 
 ## Required marks
 
@@ -128,6 +206,7 @@ Every failure is an `Error` variant, which implements `std::error::Error`:
 | `Io`         | the terminal could not be read or written                                   |
 | `EndOfInput` | the input ended, as a closed standard input does, before a field was filled |
 | `Cancelled`  | the user pressed Esc or Ctrl+C in a choice or a password                    |
+| `Refused`    | a preset answer was refused where nobody can answer again                   |
 | `NoOptions`  | a select or multiselect has no options                                      |
 | `NotFound`   | `get` names no field of the form                                            |
 | `NotFilled`  | `get` reads a field not asked yet                                           |

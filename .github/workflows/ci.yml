@@ -34,13 +34,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Documentation
-        run: cargo doc --no-deps --locked
+        run: cargo doc --workspace --all-features --no-deps --locked
 
   test:
     name: Test on ${{ matrix.os }}
@@ -60,8 +62,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test --workspace --all-features --locked
 
       - name: Package
         if: matrix.os == 'ubuntu-24.04'
-        run: cargo publish --dry-run --locked
+        run: cargo publish --workspace --dry-run --locked

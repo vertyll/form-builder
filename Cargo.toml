@@ -12,10 +12,20 @@ keywords = ["form", "builder", "validation", "fields", "input"]
 categories = ["command-line-interface"]
 exclude = [".github/", ".markright.toml"]
 
+[workspace]
+members = ["derive"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+derive = ["dep:form_builder_derive"]
+
 [dependencies]
 crossterm = "0.29.0"
 regex = "1.13.1"
 thiserror = "2.0.21"
+form_builder_derive = { version = "=2.0.0", path = "derive", optional = true }
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -8,3 +8,4 @@ Every document of the library, and what it covers. The API documentation is on [
 | [Features](docs/features.md)                   | Every kind of field, defaults, choices, validation, languages and errors. |
 | [Standards](STANDARDS.md)                      | The specifications the checks and the terminal follow.                    |
 | [Migrating from 1.x to 2.0](docs/migration.md) | Each change of the API, before and after.                                 |
+| [form_builder_derive](derive/README.md)        | The crate of the derive macro, used through the `derive` feature.         |

@@ -34,15 +34,21 @@
 //! }
 //! ```
 //!
-//! The prompt of every required field is marked with `*`, and a hint or a default is shown in grey after it:
-//! `Port * (1-65535) [8080]:`. [`FormBuilder::required_marker`] changes the mark, [`FormBuilder::no_required_marker`]
-//! leaves it out, and [`FormBuilder::messages`] translates the texts the form shows of its own.
-//! [`Form::fill_with`] fills a form through any [`Console`], such as one that replays answers in a test.
+//! Every prompt starts with its step, and the prompt of every required field is marked with `*`; the step, a hint
+//! and a default are shown in grey: `[2/8] Port * (1-65535) [8080]:`. [`FormBuilder::no_steps`] and
+//! [`FormBuilder::no_required_marker`] leave them out, and [`FormBuilder::messages`] translates the texts the form
+//! shows of its own. [`FormBuilder::review`] lists the answers at the end, to change any.
+//!
+//! [`Form::fill_with`] fills a form through any [`Console`]: a [`Preset`] answers it from the environment or the
+//! command line, where nobody can, and a console that replays answers tests it. With the `derive` feature,
+//! `#[derive(Form)]` asks for a struct field by field, through [`FromForm`].
 
 mod console;
 mod error;
 mod fields;
 mod form;
+mod from_form;
+mod preset;
 mod prompt;
 mod selection;
 pub mod validate;
@@ -51,6 +57,10 @@ pub use console::{Choice, Console, Terminal};
 pub use error::Error;
 pub use fields::{Confirm, Field, MultiSelect, Password, Select, Text};
 pub use form::{Answers, Form, FormBuilder};
+#[cfg(feature = "derive")]
+pub use form_builder_derive::Form;
+pub use from_form::FromForm;
+pub use preset::Preset;
 pub use prompt::{Messages, Prompt};
 pub use selection::Mode;
 pub use validate::Validator;

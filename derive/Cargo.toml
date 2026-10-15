@@ -1,0 +1,28 @@
+[package]
+name = "form_builder_derive"
+version = "2.0.0"
+edition = "2024"
+authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
+description = "The derive macro of form_builder: a struct asked for field by field in the terminal."
+license = "MIT"
+repository = "https://github.com/vertyll/form-builder"
+documentation = "https://docs.rs/form_builder"
+readme = "README.md"
+keywords = ["form", "derive", "terminal", "input"]
+categories = ["command-line-interface"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = { version = "2.0.119", features = ["full"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

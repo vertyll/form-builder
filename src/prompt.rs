@@ -2,14 +2,18 @@
 
 use std::fmt;
 
-/// A field's prompt, split into the parts a console may show differently: the text, the mark of a required field, a
-/// hint, and the answer an empty input gives.
+/// A field's prompt, split into the parts a console may show differently: the step, the text, the mark of a required
+/// field, a hint, and the answer an empty input gives.
 ///
-/// As text it reads `Port * (1-65535) [8080]:`; a [`Terminal`](crate::Terminal) shows the hint and the default in
-/// grey.
+/// As text it reads `[3/8] Port * (1-65535) [8080]:`; a [`Terminal`](crate::Terminal) shows the step, the hint and
+/// the default in grey.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Prompt {
+    /// The name of the field asked, which a [`Preset`](crate::Preset) finds its answer by.
+    pub name: String,
+    /// Which field of how many this is, counted from 1.
+    pub step: Option<(usize, usize)>,
     /// The prompt as the field was given it, without its closing colon.
     pub label: String,
     /// The mark of a required field, such as `*`.
@@ -23,19 +27,27 @@ pub struct Prompt {
 }
 
 impl Prompt {
-    pub(crate) fn new(text: &str) -> Self {
+    pub(crate) fn new(name: &str, text: &str) -> Self {
         let text = text.trim_end();
         let (label, colon) = match text.strip_suffix(':') {
             Some(label) => (label.trim_end(), true),
             None => (text, false),
         };
         Self {
+            name: name.to_owned(),
+            step: None,
             label: label.to_owned(),
             marker: None,
             hint: None,
             default: None,
             colon,
         }
+    }
+
+    /// The step as shown: `[3/8]`.
+    #[must_use]
+    pub fn shown_step(&self) -> Option<String> {
+        self.step.map(|(step, steps)| format!("[{step}/{steps}]"))
     }
 
     /// The text before the hint and the default: the label and the mark.
@@ -68,6 +80,9 @@ impl Prompt {
 
 impl fmt::Display for Prompt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(step) = self.shown_step() {
+            write!(f, "{step} ")?;
+        }
         f.write_str(&self.lead())?;
         for part in [self.shown_hint(), self.shown_default()].into_iter().flatten() {
             write!(f, " {part}")?;
@@ -117,6 +132,14 @@ pub struct Messages {
     pub more_above: String,
     /// Shown below a list cut to fit the terminal, with how many options are below.
     pub more_below: String,
+    /// The prompt of the review of the answers, before the form is done.
+    pub review: String,
+    /// The option of the review that accepts the answers.
+    pub submit: String,
+    /// How the review shows an optional field left empty.
+    pub empty_answer: String,
+    /// How the review shows a password.
+    pub hidden_answer: String,
 }
 
 impl Default for Messages {
@@ -136,6 +159,10 @@ impl Default for Messages {
             default_option: "default".to_owned(),
             more_above: "more above".to_owned(),
             more_below: "more below".to_owned(),
+            review: "Check your answers, or choose one to change:".to_owned(),
+            submit: "Submit".to_owned(),
+            empty_answer: "-".to_owned(),
+            hidden_answer: "********".to_owned(),
         }
     }
 }
@@ -146,17 +173,19 @@ mod tests {
 
     #[test]
     fn a_prompt_reads_with_its_marks_before_the_colon() {
-        let mut prompt = Prompt::new("Port:");
+        let mut prompt = Prompt::new("port", "Port:");
         assert_eq!(prompt.to_string(), "Port:");
         prompt.marker = Some("*".to_owned());
         prompt.hint = Some("1-65535".to_owned());
         prompt.default = Some("8080".to_owned());
         assert_eq!(prompt.to_string(), "Port * (1-65535) [8080]:");
+        prompt.step = Some((3, 8));
+        assert_eq!(prompt.to_string(), "[3/8] Port * (1-65535) [8080]:");
     }
 
     #[test]
     fn a_prompt_without_a_colon_gets_none() {
-        let mut prompt = Prompt::new("Your name ");
+        let mut prompt = Prompt::new("name", "Your name ");
         prompt.marker = Some("(required)".to_owned());
         assert_eq!(prompt.to_string(), "Your name (required)");
     }

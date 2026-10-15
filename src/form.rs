@@ -6,15 +6,17 @@ use std::str::FromStr;
 
 use crate::Error;
 use crate::console::{Choice, Console, Terminal};
-use crate::fields::{ContextRule, Fallback, Field, Kind, MultiSelect, Select, State, Text, Value};
+use crate::fields::{ContextRule, Fallback, Field, Kind, MultiSelect, Parse, Refusal, Select, State, Text, Value};
 use crate::prompt::{Messages, Prompt};
+use crate::selection::Mode;
 use crate::validate::Validator;
 
 /// Collects the fields of a form, in the order they are asked.
 ///
-/// The prompt of every required field is marked with `*`: `Name:` is asked as `Name *:`.
-/// [`required_marker`](Self::required_marker) changes the mark, and
-/// [`no_required_marker`](Self::no_required_marker) leaves it out.
+/// Every prompt starts with its step, `[3/8]`, which [`no_steps`](Self::no_steps) leaves out. The prompt of every
+/// required field is marked with `*`: `Name:` is asked as `Name *:`. [`required_marker`](Self::required_marker)
+/// changes the mark, and [`no_required_marker`](Self::no_required_marker) leaves it out. [`review`](Self::review)
+/// lists the answers at the end, to change any before the form is done.
 ///
 /// ```
 /// use form_builder::{Confirm, FormBuilder, Select, Text};
@@ -30,7 +32,15 @@ use crate::validate::Validator;
 #[must_use]
 pub struct FormBuilder {
     fields: Vec<Field>,
+    settings: Settings,
+}
+
+/// How a form shows its fields.
+#[derive(Debug)]
+struct Settings {
     required_marker: Option<String>,
+    steps: bool,
+    review: bool,
     messages: Messages,
 }
 
@@ -38,14 +48,18 @@ impl Default for FormBuilder {
     fn default() -> Self {
         Self {
             fields: Vec::new(),
-            required_marker: Some("*".to_owned()),
-            messages: Messages::default(),
+            settings: Settings {
+                required_marker: Some("*".to_owned()),
+                steps: true,
+                review: false,
+                messages: Messages::default(),
+            },
         }
     }
 }
 
 impl FormBuilder {
-    /// A builder with no fields, which marks required fields with `*` and speaks English.
+    /// A builder with no fields, which shows steps, marks required fields with `*` and speaks English.
     pub fn new() -> Self {
         Self::default()
     }
@@ -101,19 +115,33 @@ impl FormBuilder {
     /// Marks every required field with `marker` instead of `*`. A field is required unless it is an
     /// [optional](Text::optional) text field.
     pub fn required_marker(mut self, marker: impl Into<String>) -> Self {
-        self.required_marker = Some(marker.into());
+        self.settings.required_marker = Some(marker.into());
         self
     }
 
     /// Leaves required fields unmarked, their prompts as given.
     pub fn no_required_marker(mut self) -> Self {
-        self.required_marker = None;
+        self.settings.required_marker = None;
+        self
+    }
+
+    /// Leaves out the step, `[3/8]`, that starts every prompt.
+    pub fn no_steps(mut self) -> Self {
+        self.settings.steps = false;
+        self
+    }
+
+    /// Lists the answers once every field is asked, and lets the user choose one to change before the form is done.
+    /// A field asked again may change which fields after it are asked. A console that is not
+    /// [interactive](Console::is_interactive) skips the review.
+    pub fn review(mut self) -> Self {
+        self.settings.review = true;
         self
     }
 
     /// Replaces the texts the form shows of its own, such as the message of an invalid input.
     pub fn messages(mut self, messages: Messages) -> Self {
-        self.messages = messages;
+        self.settings.messages = messages;
         self
     }
 
@@ -122,8 +150,7 @@ impl FormBuilder {
     pub fn build(self) -> Form {
         Form {
             fields: self.fields,
-            required_marker: self.required_marker,
-            messages: self.messages,
+            settings: self.settings,
         }
     }
 }
@@ -132,8 +159,7 @@ impl FormBuilder {
 #[derive(Debug)]
 pub struct Form {
     fields: Vec<Field>,
-    required_marker: Option<String>,
-    messages: Messages,
+    settings: Settings,
 }
 
 impl Form {
@@ -148,13 +174,24 @@ impl Form {
     }
 
     /// Asks every field through `console`, in order, and skips a field whose condition does not hold for the answers
-    /// before it.
+    /// before it; then, when asked for, reviews the answers.
     ///
     /// # Errors
     ///
     /// As [`fill`](Self::fill).
     pub fn fill_with(&mut self, console: &mut impl Console) -> Result<(), Error> {
-        for index in 0..self.fields.len() {
+        self.ask_from(0, console)?;
+        if self.settings.review && console.is_interactive() {
+            self.review(console)?;
+        }
+        Ok(())
+    }
+
+    /// Asks the fields from `start` on whose condition holds, and skips the others; a field already answered is
+    /// asked again only when it is `start` itself.
+    fn ask_from(&mut self, start: usize, console: &mut impl Console) -> Result<(), Error> {
+        let len = self.fields.len();
+        for index in start..len {
             let (before, rest) = self.fields.split_at_mut(index);
             let field = &mut rest[0];
             let answers = Answers { fields: before };
@@ -162,16 +199,57 @@ impl Form {
                 field.state = State::Skipped;
                 continue;
             }
+            if index != start && matches!(field.state, State::Answered { .. }) {
+                continue;
+            }
             let asking = Asking {
                 field,
                 answers: &answers,
-                prompt: prompt(field, self.required_marker.as_deref()),
-                messages: &self.messages,
+                prompt: self.settings.prompt(field, index, len),
+                messages: &self.settings.messages,
             };
-            let value = asking.ask(console)?;
-            field.state = State::Answered(value);
+            let (value, shown) = asking.ask(console)?;
+            field.state = State::Answered { value, shown };
         }
         Ok(())
+    }
+
+    /// Lists the answers until the user submits them, asking again the field they choose.
+    fn review(&mut self, console: &mut impl Console) -> Result<(), Error> {
+        loop {
+            let answered: Vec<usize> = (0..self.fields.len())
+                .filter(|&index| matches!(self.fields[index].state, State::Answered { .. }))
+                .collect();
+            let mut options: Vec<String> = answered.iter().map(|&index| self.summary(index)).collect();
+            options.push(self.settings.messages.submit.clone());
+            let prompt = Prompt::new("review", &self.settings.messages.review);
+            let choice = Choice {
+                prompt: &prompt,
+                options: &options,
+                mode: Mode::Single,
+                defaults: &[answered.len()],
+                messages: &self.settings.messages,
+            };
+            let chosen = console
+                .choose(&choice)?
+                .ok_or_else(|| Error::Cancelled("review".to_owned()))?;
+            match answered.get(chosen[0]) {
+                Some(&index) => self.ask_from(index, console)?,
+                None => return Ok(()),
+            }
+        }
+    }
+
+    /// The line of the review for the field at `index`: its label and its answer.
+    fn summary(&self, index: usize) -> String {
+        let field = &self.fields[index];
+        let label = Prompt::new(&field.name, &field.prompt).label;
+        let shown = match &field.state {
+            State::Answered { shown, .. } if shown.is_empty() => self.settings.messages.empty_answer.as_str(),
+            State::Answered { shown, .. } => shown.as_str(),
+            State::Pending | State::Skipped => "",
+        };
+        format!("{label}: {shown}")
     }
 
     /// The value of the field `name`: `T` for a text field or a select, `Option<T>` for an optional text field,
@@ -212,7 +290,7 @@ impl Answers<'_> {
             .find(|field| field.name == name)
             .ok_or_else(|| Error::NotFound(name.to_owned()))?;
         let value = match &field.state {
-            State::Answered(value) => value,
+            State::Answered { value, .. } => value,
             State::Pending => return Err(Error::NotFilled(name.to_owned())),
             State::Skipped => return Err(Error::Skipped(name.to_owned())),
         };
@@ -227,7 +305,7 @@ impl Answers<'_> {
     pub fn is<T: PartialEq + 'static>(&self, name: &str, value: &T) -> bool {
         self.fields.iter().any(|field| {
             field.name == name
-                && matches!(&field.state, State::Answered(answer) if answer.downcast_ref::<T>() == Some(value))
+                && matches!(&field.state, State::Answered { value: answer, .. } if answer.downcast_ref::<T>() == Some(value))
         })
     }
 
@@ -236,23 +314,31 @@ impl Answers<'_> {
     pub fn is_answered(&self, name: &str) -> bool {
         self.fields
             .iter()
-            .any(|field| field.name == name && matches!(field.state, State::Answered(_)))
+            .any(|field| field.name == name && matches!(field.state, State::Answered { .. }))
     }
 }
 
-/// The prompt `field` is asked with: its text, the mark of a required field, its hint and its default.
-fn prompt(field: &Field, marker: Option<&str>) -> Prompt {
-    let mut prompt = Prompt::new(&field.prompt);
-    prompt.marker = marker.filter(|_| field.is_required()).map(str::to_owned);
-    prompt.hint.clone_from(&field.hint);
-    if let Kind::Text {
-        fallback: Some(Fallback { shown, .. }),
-        ..
-    } = &field.kind
-    {
-        prompt.default = Some(shown.clone());
+impl Settings {
+    /// The prompt the field at `index`, of `len`, is asked with: its step, its text, the mark of a required field, its
+    /// hint and its default.
+    fn prompt(&self, field: &Field, index: usize, len: usize) -> Prompt {
+        let mut prompt = Prompt::new(&field.name, &field.prompt);
+        prompt.step = self.steps.then_some((index + 1, len));
+        prompt.marker = self
+            .required_marker
+            .as_deref()
+            .filter(|_| field.is_required())
+            .map(str::to_owned);
+        prompt.hint.clone_from(&field.hint);
+        if let Kind::Text {
+            fallback: Some(Fallback { shown, .. }),
+            ..
+        } = &field.kind
+        {
+            prompt.default = Some(shown.clone());
+        }
+        prompt
     }
-    prompt
 }
 
 /// One field being asked, with what it is asked with.
@@ -263,8 +349,11 @@ struct Asking<'a> {
     messages: &'a Messages,
 }
 
+/// What a field gave: its value, and the answer as the review shows it.
+type Answer = (Value, String);
+
 impl Asking<'_> {
-    fn ask(&self, console: &mut impl Console) -> Result<Value, Error> {
+    fn ask(&self, console: &mut impl Console) -> Result<Answer, Error> {
         match &self.field.kind {
             Kind::Text {
                 validator,
@@ -295,8 +384,9 @@ impl Asking<'_> {
                     defaults,
                     messages: self.messages,
                 };
-                let chosen = console.choose(&choice)?.ok_or_else(|| self.cancelled())?;
-                Ok(pick(&chosen))
+                let chosen = console.choose(&choice)?.ok_or_else(|| self.unanswered(console))?;
+                let shown: Vec<&str> = chosen.iter().map(|&index| options[index].as_str()).collect();
+                Ok((pick(&chosen), shown.join(", ")))
             }
         }
     }
@@ -306,31 +396,60 @@ impl Asking<'_> {
         console: &mut impl Console,
         validator: Option<&Validator>,
         rules: &[ContextRule],
-        parse: &dyn Fn(&str) -> Result<Value, String>,
+        parse: &Parse,
         fallback: Option<&Fallback>,
         optional: bool,
-    ) -> Result<Value, Error> {
+    ) -> Result<Answer, Error> {
         loop {
-            let line = console.read_line(&self.prompt)?.ok_or_else(|| self.ended())?;
+            let line = self.line(console, &self.prompt, fallback.is_some() || optional)?;
             let input = line.trim();
-            if input.is_empty() {
-                if let Some(fallback) = fallback {
-                    return Ok((fallback.value)());
-                }
-                if optional {
-                    return parse(input).map_err(|_| self.ended());
-                }
-                console.report(&self.messages.required)?;
-                continue;
+            let outcome = if input.is_empty() {
+                self.empty(parse, fallback, optional)
+            } else {
+                self.take(input, validator, rules, parse)
+            };
+            match outcome {
+                Ok(answer) => return Ok(answer),
+                Err(message) => console.report(&message)?,
             }
-            if let Some(message) = self.refusal(validator, rules, input) {
-                console.report(message)?;
-                continue;
-            }
-            match parse(input) {
-                Ok(value) => return Ok(value),
-                Err(reason) => console.report(&format!("{}: {reason}", self.messages.invalid_input))?,
-            }
+        }
+    }
+
+    /// Reads a line at `prompt`, or, at a console nobody answers, takes an empty one when the field `takes_empty`.
+    fn line(&self, console: &mut impl Console, prompt: &Prompt, takes_empty: bool) -> Result<String, Error> {
+        match console.read_line(prompt)? {
+            Some(line) => Ok(line),
+            None if takes_empty && !console.is_interactive() => Ok(String::new()),
+            None => Err(self.ended()),
+        }
+    }
+
+    /// What an empty answer gives: the default, `None` for an optional field, or the message of a required one.
+    fn empty(&self, parse: &Parse, fallback: Option<&Fallback>, optional: bool) -> Result<Answer, String> {
+        if let Some(fallback) = fallback {
+            return Ok(((fallback.value)(), fallback.shown.clone()));
+        }
+        if optional && let Ok(value) = parse("") {
+            return Ok((value, String::new()));
+        }
+        Err(self.messages.required.clone())
+    }
+
+    /// The value `input` gives, or the message of the first check it fails.
+    fn take(
+        &self,
+        input: &str,
+        validator: Option<&Validator>,
+        rules: &[ContextRule],
+        parse: &Parse,
+    ) -> Result<Answer, String> {
+        if let Some(message) = self.refusal(validator, rules, input) {
+            return Err(message.to_owned());
+        }
+        match parse(input) {
+            Ok(value) => Ok((value, input.to_owned())),
+            Err(Refusal::Unparsed(reason)) => Err(format!("{}: {reason}", self.messages.invalid_input)),
+            Err(Refusal::Checked(message)) => Err(message),
         }
     }
 
@@ -340,9 +459,11 @@ impl Asking<'_> {
         validator: Option<&Validator>,
         rules: &[ContextRule],
         repeat: Option<&str>,
-    ) -> Result<Value, Error> {
+    ) -> Result<Answer, Error> {
         loop {
-            let first = console.read_secret(&self.prompt)?.ok_or_else(|| self.cancelled())?;
+            let first = console
+                .read_secret(&self.prompt)?
+                .ok_or_else(|| self.unanswered(console))?;
             if first.is_empty() {
                 console.report(&self.messages.required)?;
                 continue;
@@ -351,20 +472,20 @@ impl Asking<'_> {
                 console.report(message)?;
                 continue;
             }
-            if let Some(repeat) = repeat {
-                let mut again = Prompt::new(repeat);
+            if let Some(repeat) = repeat.filter(|_| console.is_interactive()) {
+                let mut again = Prompt::new(&self.field.name, repeat);
                 again.marker.clone_from(&self.prompt.marker);
-                let second = console.read_secret(&again)?.ok_or_else(|| self.cancelled())?;
+                let second = console.read_secret(&again)?.ok_or_else(|| self.unanswered(console))?;
                 if second != first {
                     console.report(&self.messages.passwords_differ)?;
                     continue;
                 }
             }
-            return Ok(Box::new(first));
+            return Ok((Box::new(first), self.messages.hidden_answer.clone()));
         }
     }
 
-    fn confirm(&self, console: &mut impl Console, default: Option<bool>) -> Result<Value, Error> {
+    fn confirm(&self, console: &mut impl Console, default: Option<bool>) -> Result<Answer, Error> {
         let (yes, no) = (initial(&self.messages.yes), initial(&self.messages.no));
         let mut prompt = self.prompt.clone();
         prompt.default = Some(match default {
@@ -373,21 +494,29 @@ impl Asking<'_> {
             None => format!("{yes}/{no}"),
         });
         loop {
-            let line = console.read_line(&prompt)?.ok_or_else(|| self.ended())?;
-            let input = line.trim().to_lowercase();
-            let answer = if input.is_empty() {
-                default
-            } else if self.messages.yes.to_lowercase().starts_with(&input) {
-                Some(true)
-            } else if self.messages.no.to_lowercase().starts_with(&input) {
-                Some(false)
-            } else {
-                None
-            };
-            match answer {
-                Some(answer) => return Ok(Box::new(answer)),
+            let line = self.line(console, &prompt, default.is_some())?;
+            match self.yes_or_no(&line, default) {
+                Some(answer) => {
+                    let word = if answer { &self.messages.yes } else { &self.messages.no };
+                    return Ok((Box::new(answer), word.clone()));
+                }
                 None => console.report(&self.messages.answer_yes_or_no)?,
             }
+        }
+    }
+
+    /// The answer `line` gives to a yes-or-no question: the default when it is empty, yes or no when it starts one of
+    /// the form's words for them, or none.
+    fn yes_or_no(&self, line: &str, default: Option<bool>) -> Option<bool> {
+        let input = line.trim().to_lowercase();
+        if input.is_empty() {
+            default
+        } else if self.messages.yes.to_lowercase().starts_with(&input) {
+            Some(true)
+        } else if self.messages.no.to_lowercase().starts_with(&input) {
+            Some(false)
+        } else {
+            None
         }
     }
 
@@ -406,8 +535,14 @@ impl Asking<'_> {
         Error::EndOfInput(self.field.name.clone())
     }
 
-    fn cancelled(&self) -> Error {
-        Error::Cancelled(self.field.name.clone())
+    /// The error of a choice or a password left without an answer: cancelled by the user at an interactive console,
+    /// or with no answer to give at another, as a [`Preset`](crate::Preset) without one.
+    fn unanswered(&self, console: &impl Console) -> Error {
+        if console.is_interactive() {
+            Error::Cancelled(self.field.name.clone())
+        } else {
+            self.ended()
+        }
     }
 }
 

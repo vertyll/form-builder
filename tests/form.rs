@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use form_builder::validate::{self, Validator};
 use form_builder::{
-    Choice, Confirm, Console, Error, FormBuilder, Messages, MultiSelect, Password, Prompt, Select, Text,
+    Choice, Confirm, Console, Error, FormBuilder, Messages, MultiSelect, Password, Preset, Prompt, Select, Text,
 };
 
 #[derive(Default)]
@@ -28,7 +28,7 @@ impl Scripted {
 
 impl Console for Scripted {
     fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
-        self.prompts.push(prompt.to_string());
+        self.prompts.push(without_step(prompt));
         Ok(self.lines.pop_front().map(str::to_owned))
     }
 
@@ -42,10 +42,17 @@ impl Console for Scripted {
     }
 
     fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
-        self.prompts.push(choice.prompt.to_string());
+        self.prompts.push(without_step(choice.prompt));
         self.defaults.push(choice.defaults.to_vec());
         Ok(self.choices.pop_front().flatten())
     }
+}
+
+/// The prompt as text without its step, which [`steps_count_the_fields`] checks on its own.
+fn without_step(prompt: &Prompt) -> String {
+    let mut prompt = prompt.clone();
+    prompt.step = None;
+    prompt.to_string()
 }
 
 #[test]
@@ -270,4 +277,199 @@ fn a_form_can_move_to_another_thread() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<form_builder::Form>();
     assert_send_sync::<FormBuilder>();
+}
+
+#[test]
+fn steps_count_the_fields() {
+    #[derive(Default)]
+    struct Steps(Vec<Option<(usize, usize)>>);
+    impl Console for Steps {
+        fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            self.0.push(prompt.step);
+            Ok(Some("x".to_owned()))
+        }
+        fn read_secret(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            self.read_line(prompt)
+        }
+        fn report(&mut self, _: &str) -> Result<(), Error> {
+            Ok(())
+        }
+        fn choose(&mut self, _: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
+            Ok(None)
+        }
+    }
+    let build = |builder: FormBuilder| {
+        builder
+            .add_field::<String>("a", "A:", None)
+            .add_field::<String>("b", "B:", None)
+            .build()
+    };
+    let mut steps = Steps::default();
+    build(FormBuilder::new()).fill_with(&mut steps).unwrap();
+    assert_eq!(steps.0, [Some((1, 2)), Some((2, 2))]);
+    let mut none = Steps::default();
+    build(FormBuilder::new().no_steps()).fill_with(&mut none).unwrap();
+    assert_eq!(none.0, [None, None]);
+}
+
+#[test]
+fn a_parsed_value_is_checked_with_its_own_message() {
+    let mut form = FormBuilder::new()
+        .field(Text::<u16>::new("port", "Port:").check(|port| *port >= 1024, "Use a port above 1023"))
+        .build();
+    let mut console = Scripted::new(&["80", "high", "8080"], vec![]);
+    form.fill_with(&mut console).unwrap();
+    assert_eq!(form.get::<u16>("port").unwrap(), 8080);
+    assert_eq!(console.reports[0], "Use a port above 1023");
+    assert!(
+        console.reports[1].starts_with("Invalid input: "),
+        "{:?}",
+        console.reports
+    );
+}
+
+#[test]
+fn the_review_asks_again_the_field_chosen_and_what_it_changes() {
+    let mut form = FormBuilder::new()
+        .review()
+        .add_field::<String>("name", "Name:", None)
+        .field(Confirm::new("company", "Company?"))
+        .field(Text::<String>::new("vat", "VAT ID:").when(|answers| answers.is("company", &true)))
+        .field(Password::new("password", "Password:"))
+        .build();
+    let mut console = Scripted::new(
+        &["Ann", "n", "secret", "y", "PL123"],
+        vec![Some(vec![1]), Some(vec![4])],
+    );
+    form.fill_with(&mut console).unwrap();
+    assert!(form.get::<bool>("company").unwrap());
+    assert_eq!(
+        form.get::<String>("vat").unwrap(),
+        "PL123",
+        "the field the change calls for is asked"
+    );
+    assert_eq!(
+        form.get::<String>("password").unwrap(),
+        "secret",
+        "an answer the change leaves alone stays"
+    );
+    assert_eq!(
+        console.prompts,
+        [
+            "Name *:",
+            "Company? * [y/n]",
+            "Password *:",
+            "Check your answers, or choose one to change:",
+            "Company? * [y/n]",
+            "VAT ID *:",
+            "Check your answers, or choose one to change:"
+        ]
+    );
+}
+
+#[test]
+fn the_review_lists_every_answer_as_shown() {
+    struct Review(Vec<String>);
+    impl Console for Review {
+        fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            Ok(Some(if prompt.name == "age" {
+                String::new()
+            } else {
+                "Ann".to_owned()
+            }))
+        }
+        fn read_secret(&mut self, _: &Prompt) -> Result<Option<String>, Error> {
+            Ok(Some("secret".to_owned()))
+        }
+        fn report(&mut self, _: &str) -> Result<(), Error> {
+            Ok(())
+        }
+        fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
+            if choice.prompt.name == "review" {
+                self.0 = choice.options.to_vec();
+                return Ok(Some(choice.defaults.to_vec()));
+            }
+            Ok(Some(vec![1]))
+        }
+    }
+    let mut form = FormBuilder::new()
+        .review()
+        .add_field::<String>("name", "Name:", None)
+        .add_optional_field::<u32>("age", "Age:", None)
+        .add_select("plan", "Plan:", [(1u8, "Free"), (2, "Pro")])
+        .field(Password::new("password", "Password:"))
+        .build();
+    let mut console = Review(Vec::new());
+    form.fill_with(&mut console).unwrap();
+    assert_eq!(
+        console.0,
+        ["Name: Ann", "Age: -", "Plan: Pro", "Password: ********", "Submit"]
+    );
+}
+
+#[test]
+fn a_preset_answers_by_name_from_any_source() {
+    let mut form = FormBuilder::new()
+        .add_field::<u16>("port", "Port:", None)
+        .add_select("plan", "Plan:", [(1u8, "Free"), (2, "Pro")])
+        .add_multiselect("tags", "Tags:", [("a", "Alpha"), ("b", "Beta")], None)
+        .field(Confirm::new("newsletter", "Newsletter?"))
+        .field(Password::new("password", "Password:"))
+        .build();
+    let vars = [
+        ("APP_PORT".to_owned(), "8080".to_owned()),
+        ("OTHER".to_owned(), "x".to_owned()),
+    ];
+    let mut preset = Preset::from_vars("APP_", vars)
+        .merge(Preset::from_args(["--plan=pro", "tags=alpha, BETA", "stray"]))
+        .answer("newsletter", "yes")
+        .answer("password", "secret");
+    assert!(!preset.is_interactive());
+    form.fill_with(&mut preset).unwrap();
+    assert_eq!(form.get::<u16>("port").unwrap(), 8080);
+    assert_eq!(form.get::<u8>("plan").unwrap(), 2);
+    assert_eq!(form.get::<Vec<&str>>("tags").unwrap(), ["a", "b"]);
+    assert!(form.get::<bool>("newsletter").unwrap());
+}
+
+#[test]
+fn a_preset_ends_the_form_with_why_an_answer_was_refused() {
+    let mut form = FormBuilder::new().add_field::<u16>("port", "Port:", None).build();
+    let error = form.fill_with(&mut Preset::new([("port", "high")])).unwrap_err();
+    assert!(
+        matches!(&error, Error::Refused { name, message } if name == "port" && message.starts_with("Invalid input")),
+        "{error}"
+    );
+    let mut missing = FormBuilder::new().add_field::<u16>("port", "Port:", None).build();
+    let error = missing.fill_with(&mut Preset::default()).unwrap_err();
+    assert!(matches!(error, Error::EndOfInput(_)), "{error}");
+    let mut plan = FormBuilder::new().add_select("plan", "Plan:", [(1u8, "Free")]).build();
+    let error = plan.fill_with(&mut Preset::new([("plan", "Gold")])).unwrap_err();
+    assert_eq!(error.to_string(), "field `plan`: no option named `Gold`");
+}
+
+#[test]
+fn a_preset_asks_its_fallback_for_what_it_lacks_or_was_refused() {
+    let mut form = FormBuilder::new()
+        .add_field::<u16>("port", "Port:", None)
+        .add_field::<String>("name", "Name:", None)
+        .build();
+    let mut preset = Preset::new([("port", "high")]).or(Scripted::new(&["8080", "Ann"], vec![]));
+    form.fill_with(&mut preset).unwrap();
+    assert_eq!(form.get::<u16>("port").unwrap(), 8080);
+    assert_eq!(form.get::<String>("name").unwrap(), "Ann");
+    assert!(preset.is_interactive());
+}
+
+#[test]
+fn a_preset_leaves_optional_and_defaulted_fields_to_their_fallbacks() {
+    let mut form = FormBuilder::new()
+        .field(Text::<u16>::new("port", "Port:").default(8080))
+        .add_optional_field::<String>("note", "Note:", None)
+        .field(Confirm::new("newsletter", "Newsletter?").default(true))
+        .build();
+    form.fill_with(&mut Preset::default()).unwrap();
+    assert_eq!(form.get::<u16>("port").unwrap(), 8080);
+    assert_eq!(form.get::<Option<String>>("note").unwrap(), None);
+    assert!(form.get::<bool>("newsletter").unwrap());
 }

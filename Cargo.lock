@@ -105,8 +105,18 @@ name = "form_builder"
 version = "2.0.0"
 dependencies = [
  "crossterm",
+ "form_builder_derive",
  "regex",
  "thiserror",
+]
+
+[[package]]
+name = "form_builder_derive"
+version = "2.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

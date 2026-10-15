@@ -42,7 +42,8 @@ fn main() -> Result<(), Error> {
 }
 ```
 
-`cargo run --example demo` runs a longer form.
+With the `derive` feature, `#[derive(Form)]` asks for a struct field by field. `cargo run --example demo` runs a
+longer form.
 
 ## Documentation
 

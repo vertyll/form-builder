@@ -33,6 +33,7 @@ fn main() -> Result<(), Error> {
     .collect();
 
     let mut form = FormBuilder::new()
+        .review()
         .field(
             Text::<String>::new("name", "Name:")
                 .validator(Validator::new().rule(validate::name, "Name cannot contain digits")),
@@ -41,7 +42,11 @@ fn main() -> Result<(), Error> {
             Text::<String>::new("email", "Email:")
                 .validator(Validator::new().rule(validate::email, "That is not an email address")),
         )
-        .field(Text::<u32>::new("age", "Age:").default(30))
+        .field(
+            Text::<u32>::new("age", "Age:")
+                .default(30)
+                .check(|age| (13..=120).contains(age), "Age must be between 13 and 120"),
+        )
         .field(Text::<f64>::optional("height", "Height:").hint("in metres"))
         .field(Select::new("country", "Country:", countries).default(&"Poland"))
         .field(Select::new("plan", "Plan:", [(1u8, "Free"), (2, "Pro"), (3, "Team")]).default(&1))

@@ -60,6 +60,12 @@ pub trait Console {
     ///
     /// Returns why the choice could not be read.
     fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error>;
+
+    /// Whether someone answers at this console, so a form may offer to review its answers; `true` unless a console
+    /// says otherwise.
+    fn is_interactive(&self) -> bool {
+        true
+    }
 }
 
 /// The terminal the program runs in.
@@ -153,8 +159,11 @@ impl Console for Terminal {
     }
 }
 
-/// Writes `prompt` with its hint and default in grey, and a space after it.
+/// Writes `prompt` with its step, hint and default in grey, and a space after it.
 fn write_prompt(out: &mut impl Write, prompt: &Prompt) -> io::Result<()> {
+    if let Some(step) = prompt.shown_step() {
+        queue!(out, PrintStyledContent(step.dark_grey()), Print(' '))?;
+    }
     queue!(out, Print(prompt.lead()))?;
     for part in [prompt.shown_hint(), prompt.shown_default()].into_iter().flatten() {
         queue!(out, Print(' '), PrintStyledContent(part.dark_grey()))?;
@@ -364,7 +373,7 @@ mod tests {
 
     #[test]
     fn a_prompt_shows_its_hint_and_default_in_grey() {
-        let mut prompt = Prompt::new("Port:");
+        let mut prompt = Prompt::new("port", "Port:");
         prompt.marker = Some("*".to_owned());
         prompt.default = Some("8080".to_owned());
         let mut out = Vec::new();
@@ -375,7 +384,7 @@ mod tests {
 
     #[test]
     fn a_multiselect_draws_its_marks_cursor_and_default() {
-        let prompt = Prompt::new("Hobbies");
+        let prompt = Prompt::new("hobbies", "Hobbies");
         let labels = options(&["Reading", "Music"]);
         let messages = Messages::default();
         let choice = Choice {
@@ -398,7 +407,7 @@ mod tests {
 
     #[test]
     fn a_long_list_is_cut_to_the_screen_with_what_is_out_of_view() {
-        let prompt = Prompt::new("Pick:");
+        let prompt = Prompt::new("pick", "Pick:");
         let labels: Vec<String> = (0..20).map(|n| format!("Option {n}")).collect();
         let messages = Messages::default();
         let choice = Choice {

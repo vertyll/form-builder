@@ -11,8 +11,15 @@ use crate::validate::Validator;
 pub(crate) type Value = Box<dyn Any + Send + Sync>;
 pub(crate) type Condition = Box<dyn Fn(&Answers<'_>) -> bool + Send + Sync>;
 pub(crate) type Check = Box<dyn Fn(&Answers<'_>, &str) -> bool + Send + Sync>;
-pub(crate) type Parse = Box<dyn Fn(&str) -> Result<Value, String> + Send + Sync>;
+pub(crate) type Parse = Box<dyn Fn(&str) -> Result<Value, Refusal> + Send + Sync>;
 pub(crate) type Pick = Box<dyn Fn(&[usize]) -> Value + Send + Sync>;
+
+/// Why a text field did not take an input: it did not parse into the field's type, with the reason its `FromStr`
+/// gives, or its value failed one of the field's checks, with that check's message.
+pub(crate) enum Refusal {
+    Unparsed(String),
+    Checked(String),
+}
 
 /// A check of an input against the answers given before it, and the message shown when it fails.
 pub(crate) struct ContextRule {
@@ -51,11 +58,11 @@ pub(crate) enum Kind {
     },
 }
 
-/// Whether a field has been asked, and what it gave.
+/// Whether a field has been asked, and what it gave: its value, and the answer as the review shows it.
 pub(crate) enum State {
     Pending,
     Skipped,
-    Answered(Value),
+    Answered { value: Value, shown: String },
 }
 
 /// A field of a form, made from a [`Text`], [`Select`], [`MultiSelect`], [`Confirm`] or [`Password`] and added with
