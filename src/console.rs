@@ -15,8 +15,10 @@ pub struct Choice<'a> {
     pub options: &'a [String],
     /// How many options may be chosen.
     pub mode: Mode,
-    /// The options the field starts with: the cursor on the first, and all of them chosen in a multiselect.
+    /// The options the field starts with, all of them chosen in a multiselect, which `d` goes back to.
     pub defaults: &'a [usize],
+    /// The option the cursor starts on.
+    pub cursor: usize,
     /// The texts the form shows of its own.
     pub messages: &'a Messages,
     /// Whether the choice changes an answer from the review, so Esc goes back to the review and keeps the answer

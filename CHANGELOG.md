@@ -16,8 +16,9 @@ and Windows. [Migrating from 1.x to 2.0](docs/migration.md) shows each change, b
 - Checks of the parsed value with `Text::check`, and rules that compare with earlier answers with `rule_with`.
 - Fields asked only when a condition on earlier answers holds, with `when`.
 - The step of every prompt, `[3/8]`, and the `*` of every required field.
-- A review of the answers before the form is done, where any can be changed or kept.
+- A review of the answers before the form is done, where any can be changed, or kept with Enter or Esc.
 - Lists that scroll when taller than the terminal, with the keys shown under the prompt.
+- Text fields and passwords typed key by key, with the arrows, Home, End, Delete and Esc.
 - `Preset`, which answers a form from the environment or the command line, where nobody can.
 - `Messages`, which translates every text the form shows of its own.
 - `#[derive(Form)]`, with the `derive` feature, which asks for a struct field by field.

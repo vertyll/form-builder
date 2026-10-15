@@ -51,6 +51,7 @@ mod error;
 mod fields;
 mod form;
 mod from_form;
+mod line;
 mod preset;
 mod prompt;
 mod selection;

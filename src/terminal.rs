@@ -2,69 +2,48 @@
 
 use std::io::{self, BufRead, IsTerminal, Write};
 
-use crossterm::cursor::{Hide, Show};
+use crossterm::cursor::{Hide, MoveToColumn, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{Print, PrintStyledContent, Stylize};
+use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue, terminal};
 
 use crate::Error;
 use crate::console::{Choice, Console};
 use crate::drawing::{Screen, draw, settle};
+use crate::line::{Edit, Line};
 use crate::prompt::Prompt;
 use crate::selection::{Action, Selection};
 
 /// The terminal the program runs in.
 ///
-/// Text comes from standard input, passwords are typed unseen, and choices are drawn in place and moved through with
-/// the arrow keys, Space and Enter. Hints and defaults are shown in grey.
+/// Text and passwords are typed key by key, a password shown as `*`: the arrows, Home and End move in the line,
+/// Backspace and Delete remove a character, and Esc leaves it. Choices are drawn in place and moved through with the
+/// arrow keys, Space and Enter. Hints and defaults are shown in grey. A standard input that is no terminal, as a
+/// pipe is, is read line by line.
 #[derive(Debug, Default)]
 pub struct Terminal;
 
 impl Console for Terminal {
     fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
-        let mut stdout = io::stdout();
-        write_prompt(&mut stdout, prompt)?;
-        stdout.flush()?;
-        let mut line = String::new();
-        if io::stdin().lock().read_line(&mut line)? == 0 {
-            return Ok(None);
+        if !io::stdin().is_terminal() {
+            return read_plain_line(prompt);
         }
-        Ok(Some(line.trim_end_matches(['\r', '\n']).to_owned()))
+        Ok(match edit_line(prompt, false)? {
+            Edit::Done(text) => Some(text),
+            Edit::Escaped => Some(ESC.to_string()),
+            Edit::Ended | Edit::Typing => None,
+        })
     }
 
     fn read_secret(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
         if !io::stdin().is_terminal() {
-            return self.read_line(prompt);
+            return read_plain_line(prompt);
         }
-        let mut stdout = io::stdout();
-        write_prompt(&mut stdout, prompt)?;
-        stdout.flush()?;
-        let raw = RawMode::enable()?;
-        let mut secret = String::new();
-        loop {
-            let Event::Key(key) = event::read()? else { continue };
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
-            if is_cancel(key) {
-                drop(raw);
-                execute!(stdout, Print("\r\n"))?;
-                return Ok(None);
-            }
-            match key.code {
-                KeyCode::Enter => {
-                    drop(raw);
-                    execute!(stdout, Print("\r\n"))?;
-                    return Ok(Some(secret));
-                }
-                KeyCode::Backspace if secret.pop().is_some() => execute!(stdout, Print("\u{8} \u{8}"))?,
-                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    secret.push(c);
-                    execute!(stdout, Print('*'))?;
-                }
-                _ => {}
-            }
-        }
+        Ok(match edit_line(prompt, true)? {
+            Edit::Done(text) => Some(text),
+            Edit::Escaped | Edit::Ended | Edit::Typing => None,
+        })
     }
 
     fn report(&mut self, message: &str) -> Result<(), Error> {
@@ -73,9 +52,10 @@ impl Console for Terminal {
     }
 
     fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
-        let mut selection = Selection::new(choice.options.len(), choice.mode, choice.defaults);
+        let mut selection =
+            Selection::new(choice.options.len(), choice.mode, choice.defaults).starting_at(choice.cursor);
         let mut stdout = io::stdout();
-        let _raw = RawMode::enable()?;
+        let _raw = RawMode::enable(true)?;
         let mut drawn = 0;
         loop {
             let (columns, rows) = terminal::size()?;
@@ -86,11 +66,17 @@ impl Console for Terminal {
                 continue;
             }
             if is_cancel(key) {
-                settle(
-                    &mut stdout,
-                    drawn,
-                    &format!("{} ({})", choice.prompt, choice.messages.cancelled),
-                )?;
+                let summary = if choice.back {
+                    let kept: Vec<&str> = choice
+                        .defaults
+                        .iter()
+                        .map(|&index| choice.options[index].as_str())
+                        .collect();
+                    format!("{} {}", choice.prompt, kept.join(", "))
+                } else {
+                    format!("{} ({})", choice.prompt, choice.messages.cancelled)
+                };
+                settle(&mut stdout, drawn, &summary)?;
                 return Ok(None);
             }
             if let Some(action) = action(key.code)
@@ -100,6 +86,53 @@ impl Console for Terminal {
                 settle(&mut stdout, drawn, &format!("{} {}", choice.prompt, labels.join(", ")))?;
                 return Ok(Some(chosen));
             }
+        }
+    }
+
+    /// Whether the standard input is a terminal: a program fed through a pipe is answered by a script, which neither
+    /// reviews its answers nor types a password twice.
+    fn is_interactive(&self) -> bool {
+        io::stdin().is_terminal()
+    }
+}
+
+/// The Escape character, which [`Console::read_line`] gives for Esc, so the form can tell it from an answer.
+const ESC: char = '\u{1b}';
+
+/// Reads one line from a standard input that is no terminal, as a pipe is, without its line ending.
+fn read_plain_line(prompt: &Prompt) -> Result<Option<String>, Error> {
+    let mut stdout = io::stdout();
+    write_prompt(&mut stdout, prompt)?;
+    stdout.flush()?;
+    let mut line = String::new();
+    if io::stdin().lock().read_line(&mut line)? == 0 {
+        return Ok(None);
+    }
+    Ok(Some(line.trim_end_matches(['\r', '\n']).to_owned()))
+}
+
+/// Lets the user type a line after `prompt`, key by key, so Esc leaves it at once and the arrows move in it; a
+/// `masked` line shows `*` for each character.
+fn edit_line(prompt: &Prompt, masked: bool) -> Result<Edit, Error> {
+    let mut stdout = io::stdout();
+    let start = prompt.to_string().chars().count() + 1;
+    let _raw = RawMode::enable(false)?;
+    let mut line = Line::default();
+    loop {
+        queue!(stdout, Print('\r'), Clear(ClearType::CurrentLine))?;
+        write_prompt(&mut stdout, prompt)?;
+        let shown = if masked { "*".repeat(line.len()) } else { line.text() };
+        let column = u16::try_from(start + line.cursor()).unwrap_or(u16::MAX);
+        queue!(stdout, Print(shown), MoveToColumn(column))?;
+        stdout.flush()?;
+        let Event::Key(key) = event::read()? else { continue };
+        if key.kind != KeyEventKind::Press {
+            continue;
+        }
+        let edit = line.apply(key);
+        if edit != Edit::Typing {
+            execute!(stdout, Print("\r\n"))?;
+            return Ok(edit);
         }
     }
 }
@@ -116,14 +149,16 @@ fn write_prompt(out: &mut impl Write, prompt: &Prompt) -> io::Result<()> {
     queue!(out, Print(prompt.end()), Print(' '))
 }
 
-/// Raw mode, with the cursor hidden, for as long as it lives: the terminal gives every key at once and shows none of
-/// them, and gets its usual mode and cursor back however the input ends.
+/// Raw mode for as long as it lives, with the cursor hidden when asked: the terminal gives every key at once and
+/// shows none of them, and gets its usual mode and cursor back however the input ends.
 struct RawMode;
 
 impl RawMode {
-    fn enable() -> io::Result<Self> {
+    fn enable(hide_cursor: bool) -> io::Result<Self> {
         terminal::enable_raw_mode()?;
-        execute!(io::stdout(), Hide)?;
+        if hide_cursor {
+            execute!(io::stdout(), Hide)?;
+        }
         Ok(Self)
     }
 }

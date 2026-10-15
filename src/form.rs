@@ -94,8 +94,10 @@ impl Form {
         }
     }
 
-    /// Lists the answers until the user submits them, asking again the field they choose.
+    /// Lists the answers until the user submits them, asking again the field they choose. The cursor starts on
+    /// Submit, and after a change on the field changed, when it is still answered.
     fn review(&mut self, console: &mut impl Console) -> Result<(), Error> {
+        let mut changed = None;
         loop {
             let answered: Vec<usize> = (0..self.fields.len())
                 .filter(|&index| matches!(self.fields[index].state, State::Answered { .. }))
@@ -107,7 +109,10 @@ impl Form {
                 prompt: &prompt,
                 options: &options,
                 mode: Mode::Single,
-                defaults: &[answered.len()],
+                defaults: &[],
+                cursor: changed
+                    .and_then(|field| answered.iter().position(|&index| index == field))
+                    .unwrap_or(answered.len()),
                 messages: &self.settings.messages,
                 back: false,
             };
@@ -120,6 +125,7 @@ impl Form {
             if self.ask(index, true, console)? {
                 self.ask_from(index + 1, console)?;
             }
+            changed = Some(index);
         }
     }
 
@@ -132,7 +138,11 @@ impl Form {
             State::Answered { shown, .. } => shown.as_str(),
             State::Pending | State::Skipped => "",
         };
-        format!("{label}: {shown}")
+        if label.ends_with(['?', '!']) {
+            format!("{label} {shown}")
+        } else {
+            format!("{label}: {shown}")
+        }
     }
 
     /// The value of the field `name`: `T` for a text field or a select, `Option<T>` for an optional text field,

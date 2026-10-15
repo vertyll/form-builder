@@ -387,7 +387,7 @@ fn the_review_lists_every_answer_as_shown() {
         fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
             if choice.prompt.name == "review" {
                 self.0 = choice.options.to_vec();
-                return Ok(Some(choice.defaults.to_vec()));
+                return Ok(Some(vec![choice.cursor]));
             }
             Ok(Some(vec![1]))
         }
@@ -467,8 +467,12 @@ fn a_preset_leaves_optional_and_defaulted_fields_to_their_fallbacks() {
         .field(Text::<u16>::new("port", "Port:").default(8080))
         .add_optional_field::<String>("note", "Note:", None)
         .field(Confirm::new("newsletter", "Newsletter?").default(true))
+        .field(Select::new("plan", "Plan:", [(1u8, "Free"), (2, "Pro")]).default(&2))
+        .field(MultiSelect::new("tags", "Tags:", [("a", "A"), ("b", "B")]).defaults(&["b"]))
         .build();
     form.fill_with(&mut Preset::default()).unwrap();
+    assert_eq!(form.get::<u8>("plan").unwrap(), 2);
+    assert_eq!(form.get::<Vec<&str>>("tags").unwrap(), ["b"]);
     assert_eq!(form.get::<u16>("port").unwrap(), 8080);
     assert_eq!(form.get::<Option<String>>("note").unwrap(), None);
     assert!(form.get::<bool>("newsletter").unwrap());
@@ -563,4 +567,79 @@ fn a_repeated_password_keeps_its_step() {
     let mut console = Steps(Vec::new());
     form.fill_with(&mut console).unwrap();
     assert_eq!(console.0, ["[1/1] Password *:", "[1/1] Repeat the password *:"]);
+}
+
+#[test]
+fn esc_typed_into_a_line_cancels_or_keeps_the_answer_being_changed() {
+    let mut form = FormBuilder::new().add_field::<String>("name", "Name:", None).build();
+    let error = form.fill_with(&mut Scripted::new(&["\u{1b}"], vec![])).unwrap_err();
+    assert!(matches!(error, Error::Cancelled(ref name) if name == "name"), "{error}");
+
+    let mut confirm = FormBuilder::new().field(Confirm::new("ok", "Ok?")).build();
+    let error = confirm.fill_with(&mut Scripted::new(&["\u{1b}"], vec![])).unwrap_err();
+    assert!(matches!(error, Error::Cancelled(_)), "{error}");
+
+    let mut review = FormBuilder::new()
+        .review()
+        .add_field::<String>("name", "Name:", None)
+        .build();
+    let mut console = Scripted::new(&["Ann", "\u{1b}"], vec![Some(vec![0]), Some(vec![1])]);
+    review.fill_with(&mut console).unwrap();
+    assert_eq!(review.get::<String>("name").unwrap(), "Ann");
+}
+
+#[test]
+fn the_review_comes_back_to_the_field_changed() {
+    struct Cursors {
+        cursors: Vec<usize>,
+        reviews: usize,
+    }
+    impl Console for Cursors {
+        fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            Ok(Some(
+                match (prompt.name.as_str(), self.reviews) {
+                    ("name", 0) => "Ann",
+                    ("name", _) => "Bea",
+                    _ => "",
+                }
+                .to_owned(),
+            ))
+        }
+        fn read_secret(&mut self, _: &Prompt) -> Result<Option<String>, Error> {
+            Ok(None)
+        }
+        fn report(&mut self, _: &str) -> Result<(), Error> {
+            Ok(())
+        }
+        fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
+            if choice.prompt.name != "review" {
+                return Ok(Some(vec![0]));
+            }
+            assert!(choice.defaults.is_empty(), "the review marks no default");
+            self.cursors.push(choice.cursor);
+            self.reviews += 1;
+            Ok(Some(vec![match self.reviews {
+                1 => 1,
+                2 => 0,
+                _ => choice.options.len() - 1,
+            }]))
+        }
+    }
+    let mut form = FormBuilder::new()
+        .review()
+        .add_field::<String>("name", "Name:", None)
+        .add_select("plan", "Plan:", [(1u8, "Free"), (2, "Pro")])
+        .add_optional_field::<u32>("age", "Age:", None)
+        .build();
+    let mut console = Cursors {
+        cursors: Vec::new(),
+        reviews: 0,
+    };
+    form.fill_with(&mut console).unwrap();
+    assert_eq!(
+        console.cursors,
+        [3, 1, 0],
+        "Submit first, then the plan changed, then the name changed"
+    );
+    assert_eq!(form.get::<String>("name").unwrap(), "Bea");
 }

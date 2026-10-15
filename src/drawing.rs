@@ -174,6 +174,7 @@ mod tests {
             options: &labels,
             mode: Mode::Multiple { limit: None },
             defaults: &[0],
+            cursor: 0,
             messages: &messages,
             back: false,
         };
@@ -198,6 +199,7 @@ mod tests {
             options: &labels,
             mode: Mode::Single,
             defaults: &[10],
+            cursor: 10,
             messages: &messages,
             back: false,
         };
@@ -228,6 +230,7 @@ mod tests {
             options: &labels,
             mode: Mode::Single,
             defaults: &[],
+            cursor: 0,
             messages: &messages,
             back: true,
         };
