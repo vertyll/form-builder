@@ -49,6 +49,7 @@ fn a_struct_is_filled_field_by_field() {
 #[derive(Default)]
 struct Answers {
     prompts: Vec<String>,
+    reports: usize,
 }
 
 impl Console for Answers {
@@ -70,8 +71,9 @@ impl Console for Answers {
         Ok(Some("secret".to_owned()))
     }
 
-    fn report(&mut self, message: &str) -> Result<(), Error> {
-        panic!("refused: {message}")
+    fn report(&mut self, _: &str) -> Result<(), Error> {
+        self.reports += 1;
+        Ok(())
     }
 
     fn choose(&mut self, _: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
@@ -83,6 +85,7 @@ impl Console for Answers {
 fn prompts_come_from_the_names_and_the_attributes() {
     let mut console = Answers::default();
     SignUp::fill_with(&mut console).unwrap();
+    assert_eq!(console.reports, 0, "no answer is refused");
     assert_eq!(
         console.prompts,
         [
