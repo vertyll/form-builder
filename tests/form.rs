@@ -483,6 +483,7 @@ fn a_change_from_the_review_can_keep_every_answer() {
     struct Keep {
         prompts: Vec<String>,
         reviews: usize,
+        reports: usize,
     }
     impl Console for Keep {
         fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
@@ -501,8 +502,9 @@ fn a_change_from_the_review_can_keep_every_answer() {
                 String::new()
             }))
         }
-        fn report(&mut self, message: &str) -> Result<(), Error> {
-            panic!("refused: {message}")
+        fn report(&mut self, _: &str) -> Result<(), Error> {
+            self.reports += 1;
+            Ok(())
         }
         fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
             if choice.prompt.name != "review" {
@@ -531,8 +533,10 @@ fn a_change_from_the_review_can_keep_every_answer() {
     let mut console = Keep {
         prompts: Vec::new(),
         reviews: 0,
+        reports: 0,
     };
     form.fill_with(&mut console).unwrap();
+    assert_eq!(console.reports, 0, "no answer is refused");
     assert_eq!(form.get::<String>("name").unwrap(), "Ann");
     assert_eq!(form.get::<u8>("plan").unwrap(), 2);
     assert!(!form.get::<bool>("newsletter").unwrap());
