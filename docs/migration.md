@@ -17,6 +17,23 @@ three places: how a validator is written, how a value is read, and the error typ
 | `ValidationMethods::min_length(value, n)`          | `validate::min_length(n)`                                       |
 | the `field`, `input` and other modules             | private; `Console` and `Terminal` are the way to supply input   |
 
+## Building a form
+
+The four `add_*` methods of 1.x are still there and take the same arguments, so a plain form needs no change in how
+it is built. What 2.0 adds is a builder for each kind of field, passed to `field`, for what one call cannot say: a
+default, a hint, a condition, a rule that compares with earlier answers.
+
+```rust
+// 1.x, and still 2.0
+.add_field::<u16>("port", "Port:", None)
+
+// 2.0, with what 1.x could not express
+.field(Text::<u16>::new("port", "Port:").default(8080).hint("1-65535"))
+```
+
+The builders are `Text`, `Select`, `MultiSelect`, `Confirm` for a yes-or-no question and `Password` for input typed
+unseen; the last two are new.
+
 ## Errors
 
 Every fallible call returns `form_builder::Error` instead of a `String`. It implements `std::error::Error`, so `?`
@@ -111,6 +128,9 @@ The checks moved from `ValidationMethods` to the `validate` module:
 
 ## Text fields
 
+A required text field refuses an empty answer with `This field is required`, where 1.x took an empty string as a
+`String`. Give the field a default, or make it optional, to accept one.
+
 A field's type still needs `FromStr`, but its parse error must implement `Display` rather than `Debug`, as the errors
 of the standard library's types and most others do. A value that does not parse is reported as `Invalid input:`
 followed by that error, and the field asks again.
@@ -129,4 +149,4 @@ A choice is drawn where the form is, below the earlier answers, and leaves one l
 
 The `input` module and its functions are private. To fill a form from something other than the terminal, such as
 answers replayed in a test, implement `Console` and call `form.fill_with(&mut console)`; `Terminal` is the console
-`fill` uses.
+`fill` uses. The texts a form shows of its own are in `Messages`, which `FormBuilder::messages` replaces.

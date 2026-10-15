@@ -236,8 +236,7 @@ impl Line {
     }
 }
 
-/// Draws `choice` where the last drawing, `drawn` rows high, was, and gives how many rows it takes on `screen`. A
-/// list taller than the screen shows the part around the cursor, with how many options are above and below it.
+/// Draws `choice` where the last drawing, `drawn` rows high, was, and gives how many rows it takes on `screen`.
 fn draw(
     out: &mut impl Write,
     choice: &Choice<'_>,
@@ -246,41 +245,8 @@ fn draw(
     screen: Screen,
 ) -> io::Result<u16> {
     erase(out, drawn)?;
-    let mut lines = vec![Line::plain(choice.prompt.to_string())];
-    let multiple = matches!(selection.mode(), Mode::Multiple { .. });
-    if multiple {
-        lines.push(Line::plain(choice.messages.choose_many.clone()));
-    }
-    let room = usize::from(screen.rows).saturating_sub(lines.len() + 1).max(1);
-    let len = choice.options.len();
-    let window = if len > room {
-        selection.window(room.saturating_sub(2).max(1))
-    } else {
-        selection.window(len)
-    };
-    let cut = window.len() < len;
-    if cut {
-        lines.push(more(window.start, &choice.messages.more_above, "↑"));
-    }
-    for index in window.clone() {
-        let cursor = if index == selection.cursor() { '>' } else { ' ' };
-        let text = if multiple {
-            let mark = if selection.is_chosen(index) { '*' } else { ' ' };
-            format!("{cursor} [{mark}] {}", choice.options[index])
-        } else {
-            format!("{cursor} {}", choice.options[index])
-        };
-        let note = choice
-            .defaults
-            .contains(&index)
-            .then(|| format!("({})", choice.messages.default_option));
-        lines.push(Line { text, note });
-    }
-    if cut {
-        lines.push(more(len - window.end, &choice.messages.more_below, "↓"));
-    }
     let mut rows: u16 = 0;
-    for line in &lines {
+    for line in lines(choice, selection, screen.rows) {
         queue!(out, Print(&line.text))?;
         let mut width = line.text.chars().count();
         if let Some(note) = &line.note {
@@ -292,6 +258,45 @@ fn draw(
     }
     out.flush()?;
     Ok(rows)
+}
+
+/// The lines of `choice` on a screen `rows` high: the prompt, the controls of a multiselect, and the options. A list
+/// taller than the screen shows the part around the cursor, with how many options are above and below it.
+fn lines(choice: &Choice<'_>, selection: &mut Selection, rows: u16) -> Vec<Line> {
+    let mut lines = vec![Line::plain(choice.prompt.to_string())];
+    if matches!(selection.mode(), Mode::Multiple { .. }) {
+        lines.push(Line::plain(choice.messages.choose_many.clone()));
+    }
+    let len = choice.options.len();
+    let room = usize::from(rows).saturating_sub(lines.len() + 1).max(1);
+    let window = selection.window(if len > room { room.saturating_sub(2).max(1) } else { len });
+    let cut = window.len() < len;
+    if cut {
+        lines.push(more(window.start, &choice.messages.more_above, "↑"));
+    }
+    lines.extend(window.clone().map(|index| option_line(choice, selection, index)));
+    if cut {
+        lines.push(more(len - window.end, &choice.messages.more_below, "↓"));
+    }
+    lines
+}
+
+/// The line of option `index`: the cursor, the mark of a multiselect, the label, and a note when it is a default.
+fn option_line(choice: &Choice<'_>, selection: &Selection, index: usize) -> Line {
+    let cursor = if index == selection.cursor() { '>' } else { ' ' };
+    let label = &choice.options[index];
+    let text = match selection.mode() {
+        Mode::Single => format!("{cursor} {label}"),
+        Mode::Multiple { .. } => {
+            let mark = if selection.is_chosen(index) { '*' } else { ' ' };
+            format!("{cursor} [{mark}] {label}")
+        }
+    };
+    let note = choice
+        .defaults
+        .contains(&index)
+        .then(|| format!("({})", choice.messages.default_option));
+    Line { text, note }
 }
 
 /// The line that says how many options are out of view on one side, or an empty one when none are.
