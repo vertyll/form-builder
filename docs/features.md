@@ -27,6 +27,22 @@ A required text field refuses an empty answer, and a value that does not parse i
 Every prompt starts with its step, in grey: `[3/8] Port *:`. It counts the fields of the form, so a skipped
 conditional field leaves a gap. `no_steps()` leaves the steps out.
 
+## Typing a line
+
+A text field and a password are typed key by key, so the line can be edited before Enter takes it:
+
+| Key                       | Does                                                                 |
+|---------------------------|----------------------------------------------------------------------|
+| `←` `→`                   | moves in the line                                                    |
+| Home, End, Ctrl+A, Ctrl+E | goes to its start or its end                                         |
+| Backspace, Delete         | removes the character before or under the cursor                     |
+| Ctrl+U                    | removes everything before the cursor                                 |
+| Enter                     | takes the line                                                       |
+| Esc, Ctrl+C               | cancels the form, or goes back to the review when changing an answer |
+| Ctrl+D, on an empty line  | ends the input, and `fill` returns `Error::EndOfInput`               |
+
+When standard input is not a terminal, as in a pipe, each answer is read as a whole line instead.
+
 ## Defaults and hints
 
 A default is what Enter on an empty answer gives. It is shown in grey after the prompt, and a hint in grey before it:
@@ -63,7 +79,10 @@ options are chosen, and needs at least one.
 ## Passwords
 
 A `Password` shows `*` for each character typed. With `repeat`, it asks a second time, at the same step, and starts
-over when the two differ. When standard input is not a terminal, as in a pipe, it is read as a plain line.
+over when the two differ. When standard input is not a terminal, as in a pipe, it is read as a plain line, once.
+
+The password reaches the program as a `String`, exactly as typed: Form Builder neither hashes nor stores it. Storing
+it safely, such as hashing it with Argon2 before it is saved, is the program's work.
 
 ## Conditional fields
 
@@ -117,8 +136,8 @@ The formats behind them are listed in [Standards](../STANDARDS.md).
 With `review()`, the form lists the answers once every field is asked, a password as `********` and an empty
 optional field as `-`, with `Submit` under the cursor. Choosing an answer asks its field again, showing the answer it
 has as its default: Enter on an empty input keeps it, and in a choice, which starts on it, Esc goes back to the review.
-A changed answer asks the fields its change calls for and skips those it rules out, and keeps the others. Esc in the
-review itself cancels the form.
+A changed answer asks the fields its change calls for and skips those it rules out, and keeps the others. Back in the
+review, the cursor is on the field just changed. Esc in the review itself cancels the form.
 
 ## Answers given ahead
 

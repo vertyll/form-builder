@@ -57,6 +57,8 @@ cargo run --example derive --features derive
 - [Features](docs/features.md) – every kind of field, defaults, choices, validation, languages and errors.
 - [Standards](STANDARDS.md) – the specifications the checks and the terminal follow.
 - [Changelog](CHANGELOG.md) – every release, and what it changed.
+- [Contributing](CONTRIBUTING.md) – reporting a bug, proposing a field, and sending a change.
+- [Security](SECURITY.md) – reporting a vulnerability privately.
 - [API documentation](https://docs.rs/form_builder) – every type and method, on docs.rs.
 
 ## License
@@ -69,8 +71,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 [regex](https://github.com/rust-lang/regex) and [thiserror](https://github.com/dtolnay/thiserror), under MIT or
 Apache-2.0, at your choice. Cargo fetches them with their own license files; a program that ships `form_builder`
 compiled in ships them too, and includes their licenses with it.
-
-## Contributing
-
-Contributions are welcome! If you find a bug or have a feature request, please open an issue on GitHub. If you would
-like to contribute code, please fork the repository and submit a pull request.

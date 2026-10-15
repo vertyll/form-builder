@@ -66,21 +66,21 @@ impl Asking<'_> {
                 if options.is_empty() {
                     return Err(Error::NoOptions(self.field.name.clone()));
                 }
-                let current = self.current().map(|(_, _, chosen)| chosen);
+                let starts = self.current().map_or(defaults.as_slice(), |(_, _, chosen)| chosen);
                 let choice = Choice {
                     prompt: &self.prompt,
                     options,
                     mode: *mode,
-                    defaults: current.unwrap_or(defaults),
+                    defaults: starts,
+                    cursor: starts.first().copied().unwrap_or(0),
                     messages: self.messages,
                     back: self.editing,
                 };
-                let Some(chosen) = console.choose(&choice)? else {
-                    return if self.editing {
-                        Ok(Outcome::Kept)
-                    } else {
-                        Err(self.unanswered(console))
-                    };
+                let chosen = match console.choose(&choice)? {
+                    Some(chosen) => chosen,
+                    None if self.editing => return Ok(Outcome::Kept),
+                    None if !console.is_interactive() && !defaults.is_empty() => defaults.clone(),
+                    None => return Err(self.unanswered(console)),
                 };
                 let shown: Vec<&str> = chosen.iter().map(|&index| options[index].as_str()).collect();
                 Ok(Outcome::Answered(Answer {
@@ -126,6 +126,9 @@ impl Asking<'_> {
         let prompt = self.editing_prompt(self.current().map_or("", |(_, shown, _)| shown));
         loop {
             let line = self.line(console, &prompt, fallback.is_some() || optional)?;
+            if line.contains(ESC) {
+                return self.escaped();
+            }
             let input = line.trim();
             if input.is_empty() && self.editing {
                 return Ok(Outcome::Kept);
@@ -189,7 +192,9 @@ impl Asking<'_> {
     ) -> Result<Outcome, Error> {
         let prompt = self.editing_prompt(&self.messages.hidden_answer);
         loop {
-            let first = console.read_secret(&prompt)?.ok_or_else(|| self.unanswered(console))?;
+            let Some(first) = console.read_secret(&prompt)? else {
+                return self.unanswered_or_kept(console);
+            };
             if first.is_empty() {
                 if self.editing {
                     return Ok(Outcome::Kept);
@@ -205,7 +210,9 @@ impl Asking<'_> {
                 let mut again = Prompt::new(&self.field.name, repeat);
                 again.step = self.prompt.step;
                 again.marker.clone_from(&self.prompt.marker);
-                let second = console.read_secret(&again)?.ok_or_else(|| self.unanswered(console))?;
+                let Some(second) = console.read_secret(&again)? else {
+                    return self.unanswered_or_kept(console);
+                };
                 if second != first {
                     console.report(&self.messages.passwords_differ)?;
                     continue;
@@ -232,6 +239,9 @@ impl Asking<'_> {
         prompt.default = default.map(|answer| self.word(answer).to_owned());
         loop {
             let line = self.line(console, &prompt, default.is_some())?;
+            if line.contains(ESC) {
+                return self.escaped();
+            }
             match self.yes_or_no(&line, default) {
                 Some(answer) if current == Some(answer) && line.trim().is_empty() => return Ok(Outcome::Kept),
                 Some(answer) => {
@@ -273,6 +283,26 @@ impl Asking<'_> {
             .map(|rule| rule.message.as_str())
     }
 
+    /// What Esc in a line means: keep the answer when it is being changed from the review, or cancel the form, as
+    /// Esc does in a choice.
+    fn escaped(&self) -> Result<Outcome, Error> {
+        if self.editing {
+            Ok(Outcome::Kept)
+        } else {
+            Err(Error::Cancelled(self.field.name.clone()))
+        }
+    }
+
+    /// What a password left without an answer means: keep the old one when it is being changed from the review, as
+    /// after Esc, or the error [`unanswered`](Self::unanswered) gives.
+    fn unanswered_or_kept(&self, console: &impl Console) -> Result<Outcome, Error> {
+        if self.editing {
+            Ok(Outcome::Kept)
+        } else {
+            Err(self.unanswered(console))
+        }
+    }
+
     fn ended(&self) -> Error {
         Error::EndOfInput(self.field.name.clone())
     }
@@ -287,6 +317,9 @@ impl Asking<'_> {
         }
     }
 }
+
+/// The Escape character, which a console gives as the line when Esc leaves it.
+const ESC: char = '\u{1b}';
 
 /// The first letter of `word`, as the short answer of a yes-or-no question.
 fn initial(word: &str) -> String {

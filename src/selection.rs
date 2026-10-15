@@ -49,6 +49,12 @@ impl Selection {
         selection
     }
 
+    /// The same selection with the cursor on `index`, or on the last option when there are fewer.
+    pub(crate) fn starting_at(mut self, index: usize) -> Self {
+        self.cursor = index.min(self.chosen.len().saturating_sub(1));
+        self
+    }
+
     /// Goes back to the defaults: the cursor on the first, and in a multiselect only they chosen.
     fn reset(&mut self) {
         self.cursor = self.defaults.first().copied().unwrap_or(0);

@@ -5,3 +5,8 @@ default = "all"
 
 [formatters]
 default = "all"
+
+# GitHub's templates are forms, not documents: they start without a title and belong in no index. The formatters still
+# format them.
+[linters.exclusions]
+paths = ['^\.github/']
