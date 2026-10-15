@@ -3,7 +3,7 @@
 use std::any::type_name;
 
 use crate::Error;
-use crate::asking::Asking;
+use crate::asking::{Asking, Outcome};
 use crate::builder::Settings;
 use crate::console::{Choice, Console};
 use crate::fields::{Field, State};
@@ -47,31 +47,51 @@ impl Form {
         Ok(())
     }
 
-    /// Asks the fields from `start` on whose condition holds, and skips the others; a field already answered is
-    /// asked again only when it is `start` itself.
+    /// Goes through the fields from `start` on: skips those whose condition does not hold, keeps those answered,
+    /// and asks the others.
     fn ask_from(&mut self, start: usize, console: &mut impl Console) -> Result<(), Error> {
-        let len = self.fields.len();
-        for index in start..len {
-            let (before, rest) = self.fields.split_at_mut(index);
-            let field = &mut rest[0];
-            let answers = Answers { fields: before };
-            if field.condition.as_ref().is_some_and(|condition| !condition(&answers)) {
-                field.state = State::Skipped;
-                continue;
+        for index in start..self.fields.len() {
+            if !self.condition_holds(index) {
+                self.fields[index].state = State::Skipped;
+            } else if !matches!(self.fields[index].state, State::Answered { .. }) {
+                self.ask(index, false, console)?;
             }
-            if index != start && matches!(field.state, State::Answered { .. }) {
-                continue;
-            }
-            let asking = Asking {
-                field,
-                answers: &answers,
-                prompt: self.settings.prompt(field, index, len),
-                messages: &self.settings.messages,
-            };
-            let (value, shown) = asking.ask(console)?;
-            field.state = State::Answered { value, shown };
         }
         Ok(())
+    }
+
+    /// Whether the field at `index` is to be asked, given the answers before it.
+    fn condition_holds(&self, index: usize) -> bool {
+        let (before, rest) = self.fields.split_at(index);
+        let answers = Answers { fields: before };
+        rest[0].condition.as_ref().is_none_or(|condition| condition(&answers))
+    }
+
+    /// Asks the field at `index`, as a change of its answer from the review when `editing`, and gives whether it
+    /// took a new answer.
+    fn ask(&mut self, index: usize, editing: bool, console: &mut impl Console) -> Result<bool, Error> {
+        let len = self.fields.len();
+        let (before, rest) = self.fields.split_at_mut(index);
+        let field = &mut rest[0];
+        let answers = Answers { fields: before };
+        let asking = Asking {
+            field,
+            answers: &answers,
+            prompt: self.settings.prompt(field, index, len),
+            messages: &self.settings.messages,
+            editing,
+        };
+        match asking.ask(console)? {
+            Outcome::Answered(answer) => {
+                field.state = State::Answered {
+                    value: answer.value,
+                    shown: answer.shown,
+                    chosen: answer.chosen,
+                };
+                Ok(true)
+            }
+            Outcome::Kept => Ok(false),
+        }
     }
 
     /// Lists the answers until the user submits them, asking again the field they choose.
@@ -89,13 +109,16 @@ impl Form {
                 mode: Mode::Single,
                 defaults: &[answered.len()],
                 messages: &self.settings.messages,
+                back: false,
             };
             let chosen = console
                 .choose(&choice)?
                 .ok_or_else(|| Error::Cancelled("review".to_owned()))?;
-            match answered.get(chosen[0]) {
-                Some(&index) => self.ask_from(index, console)?,
-                None => return Ok(()),
+            let Some(&index) = answered.get(chosen[0]) else {
+                return Ok(());
+            };
+            if self.ask(index, true, console)? {
+                self.ask_from(index + 1, console)?;
             }
         }
     }

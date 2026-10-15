@@ -20,7 +20,7 @@ pub struct Prompt {
     pub marker: Option<String>,
     /// A short note on what to enter.
     pub hint: Option<String>,
-    /// What an empty answer gives, as shown: `8080`, or `Y/n` for a yes-or-no question.
+    /// What an empty answer gives, as shown: `8080`, or `no` for a yes-or-no question.
     pub default: Option<String>,
     /// Whether the prompt ended with a colon, which goes back after the marks.
     pub colon: bool,
@@ -104,12 +104,20 @@ impl fmt::Display for Prompt {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Messages {
-    /// The keys of a select, shown under its prompt.
-    pub controls_single: String,
-    /// The keys of a multiselect, shown under its prompt.
-    pub controls_multiple: String,
-    /// The key that goes back to the defaults, added to the keys of a choice that has them.
-    pub controls_default: String,
+    /// The keys that move the cursor of a choice, shown under its prompt.
+    pub key_move: String,
+    /// The key that chooses the option of a select.
+    pub key_choose: String,
+    /// The key that marks an option of a multiselect.
+    pub key_mark: String,
+    /// The key that confirms the options marked in a multiselect.
+    pub key_confirm: String,
+    /// The key that goes back to the defaults of a choice that has them.
+    pub key_default: String,
+    /// The key that cancels the form.
+    pub key_cancel: String,
+    /// The key that goes back to the review and keeps the answer being changed.
+    pub key_back: String,
     /// What separates the keys in the line of controls.
     pub controls_separator: String,
     /// Shown when a required field gets an empty answer.
@@ -145,9 +153,13 @@ pub struct Messages {
 impl Default for Messages {
     fn default() -> Self {
         Self {
-            controls_single: "↑↓ move · Enter choose · Esc cancel".to_owned(),
-            controls_multiple: "↑↓ move · Space mark · Enter confirm · Esc cancel".to_owned(),
-            controls_default: "d default".to_owned(),
+            key_move: "↑↓ move".to_owned(),
+            key_choose: "Enter choose".to_owned(),
+            key_mark: "Space mark".to_owned(),
+            key_confirm: "Enter confirm".to_owned(),
+            key_default: "d default".to_owned(),
+            key_cancel: "Esc cancel".to_owned(),
+            key_back: "Esc back".to_owned(),
             controls_separator: " · ".to_owned(),
             required: "This field is required".to_owned(),
             invalid_input: "Invalid input".to_owned(),

@@ -1,8 +1,9 @@
-//! Asking one field: reading its answer through a console until the field takes it.
+//! Asking one field: reading its answer through a console until the field takes it, or, when the answer is being
+//! changed from the review, until the user keeps the one it had.
 
 use crate::Error;
 use crate::console::{Choice, Console};
-use crate::fields::{ContextRule, Fallback, Field, Kind, Parse, Refusal, Value};
+use crate::fields::{ContextRule, Fallback, Field, Kind, Parse, Refusal, State, Value};
 use crate::form::Answers;
 use crate::prompt::{Messages, Prompt};
 use crate::validate::Validator;
@@ -13,13 +14,35 @@ pub(crate) struct Asking<'a> {
     pub(crate) answers: &'a Answers<'a>,
     pub(crate) prompt: Prompt,
     pub(crate) messages: &'a Messages,
+    /// Whether the field is asked again from the review, so its answer may be kept.
+    pub(crate) editing: bool,
 }
 
-/// What a field gave: its value, and the answer as the review shows it.
-pub(crate) type Answer = (Value, String);
+/// What a field gave: its value, the answer as the review shows it, and the options chosen in a choice.
+pub(crate) struct Answer {
+    pub(crate) value: Value,
+    pub(crate) shown: String,
+    pub(crate) chosen: Vec<usize>,
+}
+
+impl Answer {
+    fn new(value: Value, shown: impl Into<String>) -> Self {
+        Self {
+            value,
+            shown: shown.into(),
+            chosen: Vec::new(),
+        }
+    }
+}
+
+/// How asking a field ended: with a new answer, or, when changing one from the review, with the old one kept.
+pub(crate) enum Outcome {
+    Answered(Answer),
+    Kept,
+}
 
 impl Asking<'_> {
-    pub(crate) fn ask(&self, console: &mut impl Console) -> Result<Answer, Error> {
+    pub(crate) fn ask(&self, console: &mut impl Console) -> Result<Outcome, Error> {
         match &self.field.kind {
             Kind::Text {
                 validator,
@@ -43,18 +66,52 @@ impl Asking<'_> {
                 if options.is_empty() {
                     return Err(Error::NoOptions(self.field.name.clone()));
                 }
+                let current = self.current().map(|(_, _, chosen)| chosen);
                 let choice = Choice {
                     prompt: &self.prompt,
                     options,
                     mode: *mode,
-                    defaults,
+                    defaults: current.unwrap_or(defaults),
                     messages: self.messages,
+                    back: self.editing,
                 };
-                let chosen = console.choose(&choice)?.ok_or_else(|| self.unanswered(console))?;
+                let Some(chosen) = console.choose(&choice)? else {
+                    return if self.editing {
+                        Ok(Outcome::Kept)
+                    } else {
+                        Err(self.unanswered(console))
+                    };
+                };
                 let shown: Vec<&str> = chosen.iter().map(|&index| options[index].as_str()).collect();
-                Ok((pick(&chosen), shown.join(", ")))
+                Ok(Outcome::Answered(Answer {
+                    value: pick(&chosen),
+                    shown: shown.join(", "),
+                    chosen,
+                }))
             }
         }
+    }
+
+    /// The answer the field has while it is changed from the review: its value, as shown, and the options chosen.
+    fn current(&self) -> Option<(&Value, &str, &[usize])> {
+        match &self.field.state {
+            State::Answered { value, shown, chosen } if self.editing => Some((value, shown, chosen)),
+            _ => None,
+        }
+    }
+
+    /// The prompt shown while the answer is changed from the review: the answer it has, which Enter keeps, in place
+    /// of the field's default.
+    fn editing_prompt(&self, kept: &str) -> Prompt {
+        let mut prompt = self.prompt.clone();
+        if self.editing {
+            prompt.default = Some(if kept.is_empty() {
+                self.messages.empty_answer.clone()
+            } else {
+                kept.to_owned()
+            });
+        }
+        prompt
     }
 
     fn text(
@@ -65,17 +122,21 @@ impl Asking<'_> {
         parse: &Parse,
         fallback: Option<&Fallback>,
         optional: bool,
-    ) -> Result<Answer, Error> {
+    ) -> Result<Outcome, Error> {
+        let prompt = self.editing_prompt(self.current().map_or("", |(_, shown, _)| shown));
         loop {
-            let line = self.line(console, &self.prompt, fallback.is_some() || optional)?;
+            let line = self.line(console, &prompt, fallback.is_some() || optional)?;
             let input = line.trim();
+            if input.is_empty() && self.editing {
+                return Ok(Outcome::Kept);
+            }
             let outcome = if input.is_empty() {
                 self.empty(parse, fallback, optional)
             } else {
                 self.take(input, validator, rules, parse)
             };
             match outcome {
-                Ok(answer) => return Ok(answer),
+                Ok(answer) => return Ok(Outcome::Answered(answer)),
                 Err(message) => console.report(&message)?,
             }
         }
@@ -93,10 +154,10 @@ impl Asking<'_> {
     /// What an empty answer gives: the default, `None` for an optional field, or the message of a required one.
     fn empty(&self, parse: &Parse, fallback: Option<&Fallback>, optional: bool) -> Result<Answer, String> {
         if let Some(fallback) = fallback {
-            return Ok(((fallback.value)(), fallback.shown.clone()));
+            return Ok(Answer::new((fallback.value)(), fallback.shown.clone()));
         }
         if optional && let Ok(value) = parse("") {
-            return Ok((value, String::new()));
+            return Ok(Answer::new(value, ""));
         }
         Err(self.messages.required.clone())
     }
@@ -113,7 +174,7 @@ impl Asking<'_> {
             return Err(message.to_owned());
         }
         match parse(input) {
-            Ok(value) => Ok((value, input.to_owned())),
+            Ok(value) => Ok(Answer::new(value, input)),
             Err(Refusal::Unparsed(reason)) => Err(format!("{}: {reason}", self.messages.invalid_input)),
             Err(Refusal::Checked(message)) => Err(message),
         }
@@ -125,12 +186,14 @@ impl Asking<'_> {
         validator: Option<&Validator>,
         rules: &[ContextRule],
         repeat: Option<&str>,
-    ) -> Result<Answer, Error> {
+    ) -> Result<Outcome, Error> {
+        let prompt = self.editing_prompt(&self.messages.hidden_answer);
         loop {
-            let first = console
-                .read_secret(&self.prompt)?
-                .ok_or_else(|| self.unanswered(console))?;
+            let first = console.read_secret(&prompt)?.ok_or_else(|| self.unanswered(console))?;
             if first.is_empty() {
+                if self.editing {
+                    return Ok(Outcome::Kept);
+                }
                 console.report(&self.messages.required)?;
                 continue;
             }
@@ -140,6 +203,7 @@ impl Asking<'_> {
             }
             if let Some(repeat) = repeat.filter(|_| console.is_interactive()) {
                 let mut again = Prompt::new(&self.field.name, repeat);
+                again.step = self.prompt.step;
                 again.marker.clone_from(&self.prompt.marker);
                 let second = console.read_secret(&again)?.ok_or_else(|| self.unanswered(console))?;
                 if second != first {
@@ -147,28 +211,40 @@ impl Asking<'_> {
                     continue;
                 }
             }
-            return Ok((Box::new(first), self.messages.hidden_answer.clone()));
+            return Ok(Outcome::Answered(Answer::new(
+                Box::new(first),
+                self.messages.hidden_answer.clone(),
+            )));
         }
     }
 
-    fn confirm(&self, console: &mut impl Console, default: Option<bool>) -> Result<Answer, Error> {
-        let (yes, no) = (initial(&self.messages.yes), initial(&self.messages.no));
+    fn confirm(&self, console: &mut impl Console, default: Option<bool>) -> Result<Outcome, Error> {
+        let current = self
+            .current()
+            .and_then(|(value, _, _)| value.downcast_ref::<bool>().copied());
+        let default = current.or(default);
         let mut prompt = self.prompt.clone();
-        prompt.default = Some(match default {
-            Some(true) => format!("{}/{no}", yes.to_uppercase()),
-            Some(false) => format!("{yes}/{}", no.to_uppercase()),
-            None => format!("{yes}/{no}"),
+        let choices = format!("{}/{}", initial(&self.messages.yes), initial(&self.messages.no));
+        prompt.hint = Some(match &prompt.hint {
+            Some(hint) => format!("{choices}, {hint}"),
+            None => choices,
         });
+        prompt.default = default.map(|answer| self.word(answer).to_owned());
         loop {
             let line = self.line(console, &prompt, default.is_some())?;
             match self.yes_or_no(&line, default) {
+                Some(answer) if current == Some(answer) && line.trim().is_empty() => return Ok(Outcome::Kept),
                 Some(answer) => {
-                    let word = if answer { &self.messages.yes } else { &self.messages.no };
-                    return Ok((Box::new(answer), word.clone()));
+                    return Ok(Outcome::Answered(Answer::new(Box::new(answer), self.word(answer))));
                 }
                 None => console.report(&self.messages.answer_yes_or_no)?,
             }
         }
+    }
+
+    /// The form's word for `answer`: yes or no.
+    fn word(&self, answer: bool) -> &str {
+        if answer { &self.messages.yes } else { &self.messages.no }
     }
 
     /// The answer `line` gives to a yes-or-no question: the default when it is empty, yes or no when it starts one of

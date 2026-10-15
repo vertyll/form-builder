@@ -42,14 +42,21 @@ fn main() -> Result<(), Error> {
 }
 ```
 
-With the `derive` feature, `#[derive(Form)]` asks for a struct field by field. `cargo run --example demo` runs a
-longer form.
+With the `derive` feature, `#[derive(Form)]` asks for a struct field by field. The examples run a longer form, a form
+answered from the environment and the arguments, and a derived struct:
+
+```bash
+cargo run --example demo
+APP_NAME=Ann cargo run --example preset -- port=9000 plan=pro
+cargo run --example derive --features derive
+```
 
 ## Documentation
 
 - [Contents](CONTENTS.md) – every document of the library, and what it covers.
 - [Features](docs/features.md) – every kind of field, defaults, choices, validation, languages and errors.
 - [Standards](STANDARDS.md) – the specifications the checks and the terminal follow.
+- [Changelog](CHANGELOG.md) – every release, and what it changed.
 - [API documentation](https://docs.rs/form_builder) – every type and method, on docs.rs.
 
 ## License

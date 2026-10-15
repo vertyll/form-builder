@@ -19,6 +19,9 @@ pub struct Choice<'a> {
     pub defaults: &'a [usize],
     /// The texts the form shows of its own.
     pub messages: &'a Messages,
+    /// Whether the choice changes an answer from the review, so Esc goes back to the review and keeps the answer
+    /// rather than cancelling the form.
+    pub back: bool,
 }
 
 /// What a form needs from the place it is filled in.

@@ -25,7 +25,7 @@ impl Confirm {
         }
     }
 
-    /// The answer an empty input gives, shown as `[Y/n]` or `[y/N]`.
+    /// The answer an empty input gives, shown after the prompt as `[yes]` or `[no]`.
     pub fn default(mut self, value: bool) -> Self {
         self.default = Some(value);
         self

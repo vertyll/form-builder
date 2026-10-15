@@ -88,7 +88,7 @@ fn prompts_come_from_the_names_and_the_attributes() {
         [
             "First name *:",
             "Port * (1024-65535) [8080]:",
-            "Newsletter * [y/n]:",
+            "Newsletter * (y/n):",
             "Company:"
         ]
     );

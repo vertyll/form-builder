@@ -94,7 +94,7 @@ fn every_kind_of_field_is_filled_and_read_as_its_type() {
             "Width:",
             "Plan *:",
             "Hobbies *:",
-            "Newsletter? * [y/n]",
+            "Newsletter? * (y/n)",
             "Password *:"
         ]
     );
@@ -134,7 +134,7 @@ fn an_empty_answer_takes_the_default_shown_in_the_prompt() {
     assert!(form.get::<bool>("newsletter").unwrap());
     assert_eq!(console.prompts[0], "Port * (1-65535) [8080]:");
     assert_eq!(console.prompts[1], "Backup port [8081]:");
-    assert_eq!(console.prompts[4], "Newsletter? * [Y/n]");
+    assert_eq!(console.prompts[4], "Newsletter? * (y/n) [yes]");
     assert_eq!(console.defaults, [vec![1], vec![0, 2]]);
 }
 
@@ -164,7 +164,7 @@ fn a_yes_or_no_question_takes_words_in_the_form_s_language() {
     form.fill_with(&mut console).unwrap();
     assert!(form.get::<bool>("ok").unwrap());
     assert_eq!(console.reports, ["Odpowiedz tak albo nie"]);
-    assert_eq!(console.prompts[0], "Zgoda? * [t/N]");
+    assert_eq!(console.prompts[0], "Zgoda? * (t/n) [nie]");
 }
 
 #[test]
@@ -357,10 +357,10 @@ fn the_review_asks_again_the_field_chosen_and_what_it_changes() {
         console.prompts,
         [
             "Name *:",
-            "Company? * [y/n]",
+            "Company? * (y/n)",
             "Password *:",
             "Check your answers, or choose one to change:",
-            "Company? * [y/n]",
+            "Company? * (y/n) [no]",
             "VAT ID *:",
             "Check your answers, or choose one to change:"
         ]
@@ -472,4 +472,95 @@ fn a_preset_leaves_optional_and_defaulted_fields_to_their_fallbacks() {
     assert_eq!(form.get::<u16>("port").unwrap(), 8080);
     assert_eq!(form.get::<Option<String>>("note").unwrap(), None);
     assert!(form.get::<bool>("newsletter").unwrap());
+}
+
+#[test]
+fn a_change_from_the_review_can_keep_every_answer() {
+    struct Keep {
+        prompts: Vec<String>,
+        reviews: usize,
+    }
+    impl Console for Keep {
+        fn read_line(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            self.prompts.push(without_step(prompt));
+            Ok(Some(if self.reviews == 0 && prompt.name == "name" {
+                "Ann".to_owned()
+            } else {
+                String::new()
+            }))
+        }
+        fn read_secret(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            self.prompts.push(without_step(prompt));
+            Ok(Some(if self.reviews == 0 {
+                "secret".to_owned()
+            } else {
+                String::new()
+            }))
+        }
+        fn report(&mut self, message: &str) -> Result<(), Error> {
+            panic!("refused: {message}")
+        }
+        fn choose(&mut self, choice: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
+            if choice.prompt.name != "review" {
+                assert_eq!(
+                    choice.back,
+                    self.reviews > 0,
+                    "Esc goes back only when changing an answer"
+                );
+                return Ok(if self.reviews == 0 { Some(vec![1]) } else { None });
+            }
+            self.reviews += 1;
+            Ok(Some(vec![if self.reviews > 4 {
+                choice.options.len() - 1
+            } else {
+                self.reviews - 1
+            }]))
+        }
+    }
+    let mut form = FormBuilder::new()
+        .review()
+        .add_field::<String>("name", "Name:", None)
+        .add_select("plan", "Plan:", [(1u8, "Free"), (2, "Pro")])
+        .field(Confirm::new("newsletter", "Newsletter?").default(false))
+        .field(Password::new("password", "Password:"))
+        .build();
+    let mut console = Keep {
+        prompts: Vec::new(),
+        reviews: 0,
+    };
+    form.fill_with(&mut console).unwrap();
+    assert_eq!(form.get::<String>("name").unwrap(), "Ann");
+    assert_eq!(form.get::<u8>("plan").unwrap(), 2);
+    assert!(!form.get::<bool>("newsletter").unwrap());
+    assert_eq!(form.get::<String>("password").unwrap(), "secret");
+    assert_eq!(
+        console.prompts[3..],
+        ["Name * [Ann]:", "Newsletter? * (y/n) [no]", "Password * [********]:"]
+    );
+}
+
+#[test]
+fn a_repeated_password_keeps_its_step() {
+    struct Steps(Vec<String>);
+    impl Console for Steps {
+        fn read_line(&mut self, _: &Prompt) -> Result<Option<String>, Error> {
+            Ok(None)
+        }
+        fn read_secret(&mut self, prompt: &Prompt) -> Result<Option<String>, Error> {
+            self.0.push(prompt.to_string());
+            Ok(Some("same".to_owned()))
+        }
+        fn report(&mut self, _: &str) -> Result<(), Error> {
+            Ok(())
+        }
+        fn choose(&mut self, _: &Choice<'_>) -> Result<Option<Vec<usize>>, Error> {
+            Ok(None)
+        }
+    }
+    let mut form = FormBuilder::new()
+        .field(Password::new("password", "Password:").repeat("Repeat the password:"))
+        .build();
+    let mut console = Steps(Vec::new());
+    form.fill_with(&mut console).unwrap();
+    assert_eq!(console.0, ["[1/1] Password *:", "[1/1] Repeat the password *:"]);
 }

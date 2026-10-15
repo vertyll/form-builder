@@ -40,20 +40,21 @@ Port * (1-65535) [8080]:
 ```
 
 A `Select` starts on its default option, marked `(default)`; a `MultiSelect` starts with its defaults chosen. A
-`Confirm` shows its default as the capital letter: `[y/N]`.
+`Confirm` shows the short answers as a hint and its default as the word: `Newsletter? * (y/n) [no]`.
 
 ## Choices
 
 A select or multiselect is drawn where the form is, below the earlier answers, and redrawn in place as the user
 moves. A grey line under the prompt shows the keys:
 
-| Key              | Does                                                             |
-|------------------|------------------------------------------------------------------|
-| `↑` `↓`, `k` `j` | moves the cursor                                                 |
-| Space            | marks or unmarks an option of a multiselect                      |
-| Enter            | chooses the option under the cursor, or confirms the marked ones |
-| `d`              | goes back to the defaults, when the field has them               |
-| Esc, Ctrl+C      | cancels, and `fill` returns `Error::Cancelled`                   |
+| Key                                           | Does                                                             |
+|-----------------------------------------------|------------------------------------------------------------------|
+| `↑` `↓`, `k` `j`                              | moves the cursor                                                 |
+| Space                                         | marks or unmarks an option of a multiselect                      |
+| Enter                                         | chooses the option under the cursor, or confirms the marked ones |
+| `d`                                           | goes back to the defaults, when the field has them               |
+| Esc, while changing an answer from the review | goes back to the review and keeps the answer                     |
+| Esc, Ctrl+C                                   | cancels, and `fill` returns `Error::Cancelled`                   |
 
 A list taller than the terminal shows the part around the cursor, with how many options are above and below it.
 Once chosen, the list gives way to one line with the answer, such as `Plan *: Pro`. A multiselect may limit how many
@@ -61,8 +62,8 @@ options are chosen, and needs at least one.
 
 ## Passwords
 
-A `Password` shows `*` for each character typed. With `repeat`, it asks a second time and starts over when the two
-differ. When standard input is not a terminal, as in a pipe, it is read as a plain line.
+A `Password` shows `*` for each character typed. With `repeat`, it asks a second time, at the same step, and starts
+over when the two differ. When standard input is not a terminal, as in a pipe, it is read as a plain line.
 
 ## Conditional fields
 
@@ -114,8 +115,10 @@ The formats behind them are listed in [Standards](../STANDARDS.md).
 ## Review
 
 With `review()`, the form lists the answers once every field is asked, a password as `********` and an empty
-optional field as `-`, with `Submit` under the cursor. Choosing an answer asks its field again; a changed answer asks
-the fields its change calls for and skips those it rules out, and keeps the others. Esc cancels the form.
+optional field as `-`, with `Submit` under the cursor. Choosing an answer asks its field again, showing the answer it
+has as its default: Enter on an empty input keeps it, and in a choice, which starts on it, Esc goes back to the review.
+A changed answer asks the fields its change calls for and skips those it rules out, and keeps the others. Esc in the
+review itself cancels the form.
 
 ## Answers given ahead
 

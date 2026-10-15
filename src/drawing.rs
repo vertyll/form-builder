@@ -87,21 +87,27 @@ fn lines(choice: &Choice<'_>, selection: &mut Selection, rows: u16) -> Vec<Line>
     lines
 }
 
-/// The line of keys under the prompt, in grey: how to move, choose and cancel, and how to go back to the defaults
-/// when the choice has them.
+/// The line of keys under the prompt, in grey: how to move and choose, how to go back to the defaults when the
+/// choice has them, and how to cancel, or to go back to the review when an answer is being changed.
 fn controls(choice: &Choice<'_>) -> Line {
     let messages = choice.messages;
-    let mut keys = match choice.mode {
-        Mode::Single => messages.controls_single.clone(),
-        Mode::Multiple { .. } => messages.controls_multiple.clone(),
-    };
-    if !choice.defaults.is_empty() {
-        keys.push_str(&messages.controls_separator);
-        keys.push_str(&messages.controls_default);
+    let mut keys = vec![&messages.key_move];
+    match choice.mode {
+        Mode::Single => keys.push(&messages.key_choose),
+        Mode::Multiple { .. } => keys.extend([&messages.key_mark, &messages.key_confirm]),
     }
+    if !choice.defaults.is_empty() {
+        keys.push(&messages.key_default);
+    }
+    keys.push(if choice.back {
+        &messages.key_back
+    } else {
+        &messages.key_cancel
+    });
+    let keys: Vec<&str> = keys.into_iter().map(String::as_str).collect();
     Line {
         text: String::new(),
-        note: Some(keys),
+        note: Some(keys.join(&messages.controls_separator)),
     }
 }
 
@@ -169,13 +175,14 @@ mod tests {
             mode: Mode::Multiple { limit: None },
             defaults: &[0],
             messages: &messages,
+            back: false,
         };
         let mut selection = Selection::new(2, choice.mode, &[0]);
         let (text, rows) = drawing(&choice, &mut selection, Screen { columns: 80, rows: 24 });
         assert!(text.contains("> [*] Reading \u{1b}[38;5;8m(default)"), "{text:?}");
         assert!(text.contains("  [ ] Music\r\n"), "{text:?}");
         assert!(
-            text.contains("Space mark · Enter confirm · Esc cancel · d default"),
+            text.contains("↑↓ move · Space mark · Enter confirm · d default · Esc cancel"),
             "{text:?}"
         );
         assert_eq!(rows, 4, "the prompt, the controls and two options");
@@ -192,6 +199,7 @@ mod tests {
             mode: Mode::Single,
             defaults: &[10],
             messages: &messages,
+            back: false,
         };
         let mut selection = Selection::new(20, Mode::Single, &[10]);
         let (text, rows) = drawing(&choice, &mut selection, Screen { columns: 80, rows: 8 });
@@ -204,10 +212,28 @@ mod tests {
             "{text:?}"
         );
         assert!(
-            text.contains("↑↓ move · Enter choose · Esc cancel · d default"),
+            text.contains("↑↓ move · Enter choose · d default · Esc cancel"),
             "{text:?}"
         );
         assert!(text.contains("> Option 10") && !text.contains("Option 7\r"), "{text:?}");
+    }
+
+    #[test]
+    fn a_change_from_the_review_goes_back_with_esc() {
+        let prompt = Prompt::new("plan", "Plan:");
+        let labels = options(&["Free", "Pro"]);
+        let messages = Messages::default();
+        let choice = Choice {
+            prompt: &prompt,
+            options: &labels,
+            mode: Mode::Single,
+            defaults: &[],
+            messages: &messages,
+            back: true,
+        };
+        let mut selection = Selection::new(2, Mode::Single, &[]);
+        let (text, _) = drawing(&choice, &mut selection, Screen { columns: 80, rows: 24 });
+        assert!(text.contains("↑↓ move · Enter choose · Esc back"), "{text:?}");
     }
 
     #[test]

@@ -58,11 +58,16 @@ pub(crate) enum Kind {
     },
 }
 
-/// Whether a field has been asked, and what it gave: its value, and the answer as the review shows it.
+/// Whether a field has been asked, and what it gave: its value, the answer as the review shows it, and for a choice
+/// the options chosen, which a change of the answer starts from.
 pub(crate) enum State {
     Pending,
     Skipped,
-    Answered { value: Value, shown: String },
+    Answered {
+        value: Value,
+        shown: String,
+        chosen: Vec<usize>,
+    },
 }
 
 /// A field of a form, made from a [`Text`], [`Select`], [`MultiSelect`], [`Confirm`] or [`Password`] and added with
