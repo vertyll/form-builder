@@ -32,7 +32,7 @@ pub(crate) struct Screen {
     pub(crate) rows: u16,
 }
 
-/// A line of a drawn choice: its text, and whether it is shown in grey.
+/// A line of a drawn choice: its text, and a note after it shown in grey.
 struct Line {
     text: String,
     note: Option<String>,
