@@ -1,6 +1,6 @@
 [package]
 name = "form_builder"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
 description = "A library for building forms with various fields and validation."
@@ -25,7 +25,7 @@ derive = ["dep:form_builder_derive"]
 crossterm = "0.29.0"
 regex = "1.13.1"
 thiserror = "2.0.21"
-form_builder_derive = { version = "=2.0.0", path = "derive", optional = true }
+form_builder_derive = { version = "=2.0.1", path = "derive", optional = true }
 
 [[example]]
 name = "derive"

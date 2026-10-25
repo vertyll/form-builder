@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "form_builder"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "crossterm",
  "form_builder_derive",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "form_builder_derive"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "proc-macro2",
  "quote",

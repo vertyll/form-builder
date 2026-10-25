@@ -2,6 +2,12 @@
 
 Every release, newest first. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.1
+
+### Changed
+
+- `#[derive(Form)]` is built on `syn` 3; the code it generates is unchanged.
+
 ## 2.0.0
 
 A rewrite of the API around values read as their types, errors to match, and a terminal that works on Linux, macOS

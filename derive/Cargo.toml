@@ -1,6 +1,6 @@
 [package]
 name = "form_builder_derive"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 authors = ["Mikołaj Gawron <gawrmiko@gmail.com>"]
 description = "The derive macro of form_builder: a struct asked for field by field in the terminal."
