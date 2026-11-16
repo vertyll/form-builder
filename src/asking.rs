@@ -323,10 +323,7 @@ const ESC: char = '\u{1b}';
 
 /// The first letter of `word`, as the short answer of a yes-or-no question.
 fn initial(word: &str) -> String {
-    word.chars()
-        .next()
-        .map(|c| c.to_lowercase().to_string())
-        .unwrap_or_default()
+    word.chars().next().map_or_default(|c| c.to_lowercase().to_string())
 }
 
 #[cfg(test)]
