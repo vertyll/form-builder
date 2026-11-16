@@ -141,8 +141,7 @@ fn words(name: &str) -> String {
     let mut chars = spaced.chars();
     chars
         .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
+        .map_or_default(|first| first.to_uppercase().chain(chars).collect())
 }
 
 fn last_segment(ty: &Type) -> Option<&syn::PathSegment> {
